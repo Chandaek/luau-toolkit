@@ -226,7 +226,7 @@ print(Storage:Get("Coins"))
 
 <div align="center">
 
-Provided to [Chandaek/luau-toolkit](https://github.com/Chandaek/luau-toolkit) by `Chandaek@Home/Unknown v0.0`  
+Provided to [Chandaek/luau-toolkit](https://github.com/Chandaek/luau-toolkit) by `Chandaek@Home/Unknown v0.0`<br>
 (Content powered by [ChatGPT](https://chatgpt.com/))
 
 </div>
