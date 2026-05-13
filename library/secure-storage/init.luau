@@ -264,28 +264,28 @@ function SecureStorage:Compact(): ()
 end
 
 function SecureStorage:Stats(): ({
-	HotCount: number,
-	ColdCount: number,
-	PinnedCount: number,
-	BufferUsed: number,
-	BufferCapacity: number,
-	FragmentationBytes: number,
+    HotCount: number,
+    ColdCount: number,
+    PinnedCount: number,
+    BufferUsed: number,
+    BufferCapacity: number,
+    FragmentationBytes: number,
 })
-	local HotCount, ColdCount, PinnedCount = 0, 0, 0
-	for _, Tier in pairs(self._tier) do
-		if Tier == TierHot then HotCount += 1
-		elseif Tier == TierCold then ColdCount += 1
-		else PinnedCount += 1
-		end
-	end
-	return {
-		HotCount = HotCount,
-		ColdCount = ColdCount,
-		PinnedCount = PinnedCount,
-		BufferUsed = self._writeHead - self._freeBytes,
-		BufferCapacity = buffer.len(self._coldBuffer),
-		FragmentationBytes = self._freeBytes,
-	}
+    local HotCount, ColdCount, PinnedCount = 0, 0, 0
+    for _, Tier in pairs(self._tier) do
+        if Tier == TierHot then HotCount += 1
+        elseif Tier == TierCold then ColdCount += 1
+        else PinnedCount += 1
+        end
+    end
+    local Cache = self._statsCache
+    Cache.HotCount = HotCount
+    Cache.ColdCount = ColdCount
+    Cache.PinnedCount = PinnedCount
+    Cache.BufferUsed = self._writeHead - self._freeBytes
+    Cache.BufferCapacity = buffer.len(self._coldBuffer)
+    Cache.FragmentationBytes = self._freeBytes
+    return Cache
 end
 
 function SecureStorage:Destroy(): ()
@@ -360,6 +360,14 @@ function SecureStorageImpl.new(StorageConfiguration: StorageConfiguration): (Sec
 	self._writeHead = 0
 	self._freeBytes = 0
 	self._isDestroyed = false
+	self._statsCache = {
+		HotCount = 0,
+		ColdCount = 0,
+		PinnedCount = 0,
+		BufferUsed = 0,
+		BufferCapacity = 0,
+		FragmentationBytes = 0,
+	}
 	
 	if Config.DataMigration and Config.FlushInterval > 0 then
 		ScheduleAutoFlush(self)
