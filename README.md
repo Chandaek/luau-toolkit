@@ -1,25 +1,66 @@
-## luau-toolkit
-This repository is a public collection of the Luau modules and utilities I use across my projects. I maintain these here, to make it easier to integrate them into different environments or share it.
+<div align="center">
 
-## Structure
-The toolkit is organized into two categories based on the complexity of the modules:
+# luau-toolkit
 
-* /common: Primitive, versatile modules intended for general use.
-* /library: More complex modules designed as a specialized tool intended for specific purpose.
+<p>
+A public collection of reusable Luau modules and utilities used across multiple projects and environments.
+</p>
 
-## Purpose
-These tools are built for my personal development. The primary goals are:
-
-* Reusability: Standardizing common logic to avoid rewriting the same systems for every project.
-* Laziness: Writing readable and reusable code once to avoid the labour of solving the same problems twice.
-* Decoupling: Modules are designed to be modular so they can be used independently where possible.
-
-## Usage
-While these modules are tailored to my specific needs, they are public for anyone to reference, fork, or use in their own Luau projects.
-
-## License
-This project is licensed under the MIT License.
+</div>
 
 ---
 
-$${\color{gray}<}$$ Artificially modified by [Google AI](https://gemini.google.com/app), and is provided by $${\color{lightgreen}Chandaek@Home \color{silver}/ \color{green}Unknown \space ^{\color{royalblue}v0.0} \space \color{gray}>}$$
+# Overview
+
+`luau-toolkit` is a centralized repository containing reusable modules, utilities, and development helpers designed for Luau-based projects.
+
+The repository exists to simplify integration across projects, reduce repeated implementation work, and maintain a consistent modular workflow.
+
+---
+
+# Repository Structure
+
+The toolkit is separated into two primary categories based on module complexity and intended usage.
+
+| Directory | Description |
+|---|---|
+| `/common` | Lightweight and versatile modules intended for general-purpose usage. |
+| `/library` | Larger and more specialized systems designed for specific development purposes. |
+
+---
+
+# Design Goals
+
+The toolkit is primarily built for personal development workflows with several long-term engineering goals.
+
+| Goal | Description |
+|---|---|
+| **Reusability** | Standardizes commonly reused systems to avoid duplicated implementation work. |
+| **Laziness** | Encourages writing maintainable and reusable logic once instead of solving identical problems repeatedly. |
+| **Decoupling** | Modules are designed to remain modular and independently usable whenever possible. |
+
+---
+
+# Usage
+
+Although these modules are tailored toward personal project requirements, the repository is public and available for:
+
+- Reference
+- Forking
+- Modification
+- Integration into other Luau projects
+
+---
+
+# License
+
+This project is licensed under the **MIT License**.
+
+---
+
+<div align="center">
+
+Provided to [Chandaek/luau-toolkit](https://github.com/Chandaek/luau-toolkit) by `Chandaek@Home/Unknown v0.0`<br>
+(Content powered by [Google AI](https://gemini.google.com/app))
+
+</div>
