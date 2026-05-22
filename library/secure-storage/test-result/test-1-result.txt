@@ -1,0 +1,125 @@
+  18:02:24.009  
+━━━  1 · Basic Set / Get  ━━━  -  Server - Script:20
+  18:02:24.009    ✓  number round-trips  -  Server - Script:12
+  18:02:24.009    ✓  string round-trips  -  Server - Script:12
+  18:02:24.010    ✓  boolean true round-trips  -  Server - Script:12
+  18:02:24.010    ✓  boolean false round-trips  -  Server - Script:12
+  18:02:24.010    ✓  set nil deletes key  -  Server - Script:12
+  18:02:24.010    ✓  Has returns false after nil set  -  Server - Script:12
+  18:02:24.010    ✓  missing key returns nil  -  Server - Script:12
+  18:02:24.010  
+━━━  2 · Data Types  ━━━  -  Server - Script:20
+  18:02:24.010    ✓  zero  -  Server - Script:12
+  18:02:24.010    ✓  negative float  -  Server - Script:12
+  18:02:24.010    ✓  2^53 exact  -  Server - Script:12
+  18:02:24.010    ✓  very small float  -  Server - Script:12
+  18:02:24.010    ✓  math.huge  -  Server - Script:12
+  18:02:24.010    ✓  -math.huge  -  Server - Script:12
+  18:02:24.010    ✓  NaN stored (nil before set)  -  Server - Script:12
+  18:02:24.010    ✓  empty string  -  Server - Script:12
+  18:02:24.010    ✓  10 000-char string  -  Server - Script:12
+  18:02:24.010    ✓  binary string with null bytes  -  Server - Script:12
+  18:02:24.010    ✓  table stored as pinned  -  Server - Script:12
+  18:02:24.010  
+━━━  3 · Has / Keys  ━━━  -  Server - Script:20
+  18:02:24.010    ✓  Has existing key A  -  Server - Script:12
+  18:02:24.011    ✓  Has existing key B  -  Server - Script:12
+  18:02:24.011    ✓  Has missing key Z  -  Server - Script:12
+  18:02:24.011    ✓  Keys count = 3  -  Server - Script:12
+  18:02:24.011    ✓  Keys content correct  -  Server - Script:12
+  18:02:24.011    ✓  Has false after Delete  -  Server - Script:12
+  18:02:24.011    ✓  Keys count = 2 after Delete  -  Server - Script:12
+  18:02:24.011  
+━━━  4 · Delete  ━━━  -  Server - Script:20
+  18:02:24.011    ✓  deleted key returns nil  -  Server - Script:12
+  18:02:24.011    ✓  deleted key not in Has  -  Server - Script:12
+  18:02:24.011    ✓  delete non-existent key does not error  -  Server - Script:12
+  18:02:24.011    ✓  key re-usable after delete  -  Server - Script:12
+  18:02:24.011  
+━━━  5 · Overwrite  ━━━  -  Server - Script:20
+  18:02:24.011    ✓  overwrite number → number  -  Server - Script:12
+  18:02:24.011    ✓  overwrite number → string  -  Server - Script:12
+  18:02:24.011    ✓  overwrite string → boolean  -  Server - Script:12
+  18:02:24.011    ✓  overwrite boolean → table (pinned)  -  Server - Script:12
+  18:02:24.011  
+━━━  6 · StoreToBufferOnSet  ━━━  -  Server - Script:20
+  18:02:24.011    ✓  primitives go cold immediately, ColdCount=3  -  Server - Script:12
+  18:02:24.012    ✓  cold number decodes correctly  -  Server - Script:12
+  18:02:24.012    ✓  cold string decodes correctly  -  Server - Script:12
+  18:02:24.012    ✓  cold boolean decodes correctly  -  Server - Script:12
+  18:02:24.012    ✓  table remains pinned even with StoreToBufferOnSet  -  Server - Script:12
+  18:02:24.012  
+━━━  7 · Buffer Expansion — Auto  ━━━  -  Server - Script:20
+  18:02:24.012    ✓  all 50 cold values correct after auto-expansion  -  Server - Script:12
+  18:02:24.012    ✓  capacity >= used after expansion  -  Server - Script:12
+  18:02:24.012  
+━━━  8 · Buffer Expansion — Manual  ━━━  -  Server - Script:20
+  18:02:24.012    ✓  Manual mode errors when buffer is full  -  Server - Script:12
+  18:02:24.012    ✓  write succeeds after Expand()  -  Server - Script:12
+  18:02:24.012  
+━━━  9 · MaxBudget  ━━━  -  Server - Script:20
+  18:02:24.012    ✓  MaxBudget enforced — error raised when exceeded  -  Server - Script:12
+  18:02:24.012    ✓  capacity never exceeds MaxBudget, got 128  -  Server - Script:12
+  18:02:24.012  
+━━━  10 · Compaction  ━━━  -  Server - Script:20
+  18:02:24.013    ✓  no fragmentation after Compact()  -  Server - Script:12
+  18:02:24.013    ✓  buffer used shrank after Compact()  -  Server - Script:12
+  18:02:24.013    ✓  surviving values intact after compaction  -  Server - Script:12
+  18:02:24.013  
+━━━  11 · SmartShrink  ━━━  -  Server - Script:20
+  18:02:24.013    ✓  SmartShrink reduced capacity: 512 → 64  -  Server - Script:12
+  18:02:24.013    ✓  no fragmentation after smart compaction  -  Server - Script:12
+  18:02:24.013  
+━━━  12 · DataMigration — Hot ↔ Cold  ━━━  -  Server - Script:20
+  18:02:24.013    ✓  starts hot  -  Server - Script:12
+  18:02:24.013    ✓  flushed to cold immediately (TableMigrationTime=0)  -  Server - Script:12
+  18:02:24.013    ✓  value correct after flush to cold  -  Server - Script:12
+  18:02:24.013    ✓  3 reads promoted back to hot  -  Server - Script:12
+  18:02:24.013  
+━━━  13 · DataMigration disabled  ━━━  -  Server - Script:20
+  18:02:24.013    ✓  Flush no-ops when DataMigration=false  -  Server - Script:12
+  18:02:24.014    ✓  value still readable  -  Server - Script:12
+  18:02:24.014  
+━━━  14 · Destroy  ━━━  -  Server - Script:20
+  18:02:24.036    ✓  destroyed store is inert or errors on access  -  Server - Script:12
+  18:02:24.036  
+━━━  15 · Stats  ━━━  -  Server - Script:20
+  18:02:24.036    ✓  PinnedCount=1, got 1  -  Server - Script:12
+  18:02:24.037    ✓  ColdCount=2, got 2  -  Server - Script:12
+  18:02:24.037    ✓  HotCount=0, got 0  -  Server - Script:12
+  18:02:24.037    ✓  BufferUsed > 0  -  Server - Script:12
+  18:02:24.037    ✓  capacity >= used  -  Server - Script:12
+  18:02:24.037    ✓  no fragmentation on fresh store  -  Server - Script:12
+  18:02:24.037  
+━━━  16 · Stress — Mixed Hot / Cold  (1 000 ops)  ━━━  -  Server - Script:20
+  18:02:24.037    1 000 ops in 0.000372s  (~2687450 ops/sec)  -  Server - Script:488
+  18:02:24.037    ✓  all tracked values correct after stress  -  Server - Script:12
+  18:02:24.038  
+━━━  17 · Stress — StoreToBufferOnSet  (1 000 ops)  ━━━  -  Server - Script:20
+  18:02:24.039    1 000 cold-path ops in 0.000928s  (~1077586 ops/sec)  -  Server - Script:542
+  18:02:24.039    ✓  all cold-path values correct after stress  -  Server - Script:12
+  18:02:24.039  
+━━━  18 · Extreme Stress — 100 000 ops  ━━━  -  Server - Script:20
+  18:02:24.081    100 000 ops in 0.042224s  (~2368326 ops/sec)  -  Server - Script:607
+  18:02:24.081    Set=39851  Get=40285  Delete=19864  -  Server - Script:608
+  18:02:24.082    Hot=133  Cold=0  Pinned=0  -  Server - Script:611
+  18:02:24.082    BufferUsed=0  BufferCapacity=32768  Frag=0  -  Server - Script:612
+  18:02:24.082    ✓  all values correct after 100 000 ops  -  Server - Script:12
+  18:02:24.082    ✓  completed in under 2s, got 0.0422s  -  Server - Script:12
+  18:02:24.082  
+━━━  19 · Extreme Stress — Cold-only 100 000 ops  ━━━  -  Server - Script:20
+  18:02:24.145    100 000 cold-only ops in 0.062929s  (~1589094 ops/sec)  -  Server - Script:671
+  18:02:24.145    ✓  all cold-only values correct after 100 000 ops  -  Server - Script:12
+  18:02:24.145    ✓  completed in under 2s, got 0.0629s  -  Server - Script:12
+  18:02:24.145  
+━━━  20 · Extreme Stress — Compaction under churn  ━━━  -  Server - Script:20
+  18:02:24.190    50 000 churn ops in 0.044150s  -  Server - Script:727
+  18:02:24.190    BufferUsed=117  Frag=2880  Cap=16384  -  Server - Script:730
+  18:02:24.190    ✓  all values correct after high-churn compaction stress  -  Server - Script:12
+  18:02:24.190  
+═══════════════════════════════  -  Server - Script:24
+  18:02:24.190    Passed : 69  -  Server - Script:25
+  18:02:24.190    Failed : 0  -  Server - Script:26
+  18:02:24.190    Total  : 69  -  Server - Script:27
+  18:02:24.190  ═══════════════════════════════
+  -  Server - Script:28
