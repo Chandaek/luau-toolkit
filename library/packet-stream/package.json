@@ -1,0 +1,12 @@
+{
+  "name": "PacketStream",
+  "version": "0.2.1",
+  "description": "memory-optimized networking system.",
+  "entry": "init.luau",
+  "author": "Chandaek",
+  "license": "MIT",
+  "dependencies": {
+    "SecureStorage",
+    "EventEmitter"
+  }
+}
