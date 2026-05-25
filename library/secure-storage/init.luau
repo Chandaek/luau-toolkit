@@ -167,6 +167,7 @@ function SecureStorage._CheckCompaction(self): ()
 end
 
 function SecureStorage:Set(Key: string, Value: any): ()
+	if not self.Alive then error("[SecureStorage] Storage is destroyed.") end
 	if Value == nil then
 		SecureStorage.Delete(self, Key)
 		return
@@ -177,7 +178,7 @@ function SecureStorage:Set(Key: string, Value: any): ()
 		self._coldIndex[Key] = nil
 		self._coldSize[Key] = nil
 	end
-
+	
 	if self._config.StoreToBufferOnSet and IsPrimitive(Value) then
 		local Size = EncodedSize(Value)
 		SecureStorage._EnsureCapacity(self, Size)
@@ -191,12 +192,13 @@ function SecureStorage:Set(Key: string, Value: any): ()
 		self._hotStore[Key] = Value
 		self._tier[Key] = IsPrimitive(Value) and TierHot or TierPinned
 	end
-
+	
 	SecureStorage._TrackAccess(self, Key)
 	SecureStorage._CheckCompaction(self)
 end
 
 function SecureStorage:Get(Key: string): (any)
+	if not self.Alive then error("[SecureStorage] Storage is destroyed.") end
 	local Tier = self._tier[Key]
 	if Tier == nil then return nil end
 	SecureStorage._TrackAccess(self, Key)
@@ -211,6 +213,7 @@ function SecureStorage:Get(Key: string): (any)
 end
 
 function SecureStorage:Delete(Key: string): ()
+	if not self.Alive then error("[SecureStorage] Storage is destroyed.") end
 	local Tier = self._tier[Key]
 	if Tier == nil then return end
 	if Tier == TierCold then
@@ -226,10 +229,12 @@ function SecureStorage:Delete(Key: string): ()
 end
 
 function SecureStorage:Has(Key: string): (boolean)
+	if not self.Alive then error("[SecureStorage] Storage is destroyed.") end
 	return self._tier[Key] ~= nil
 end
 
 function SecureStorage:Keys(): ({string})
+	if not self.Alive then error("[SecureStorage] Storage is destroyed.") end
 	local Result = {}
 	for Key in pairs(self._tier) do
 		table.insert(Result, Key)
@@ -238,6 +243,7 @@ function SecureStorage:Keys(): ({string})
 end
 
 function SecureStorage:Expand(Budget: number?): ()
+	if not self.Alive then error("[SecureStorage] Storage is destroyed.") end
 	local Amount = Budget or self._config.BufferDefaultBudget
 	local New = buffer.create(buffer.len(self._coldBuffer) + Amount)
 	buffer.copy(New, 0, self._coldBuffer, 0, self._writeHead)
@@ -245,6 +251,7 @@ function SecureStorage:Expand(Budget: number?): ()
 end
 
 function SecureStorage:Flush(): ()
+	if not self.Alive then error("[SecureStorage] Storage is destroyed.") end
 	if not self._config.DataMigration then return end
 	local Now = os.clock()
 	local MigrationTime = self._config.TableMigrationTime
@@ -260,36 +267,56 @@ function SecureStorage:Flush(): ()
 end
 
 function SecureStorage:Compact(): ()
-	self._Compact(self)
+	if not self.Alive then error("[SecureStorage] Storage is destroyed.") end
+	SecureStorage._Compact(self)
 end
 
 function SecureStorage:Stats(): ({
-    HotCount: number,
-    ColdCount: number,
-    PinnedCount: number,
-    BufferUsed: number,
-    BufferCapacity: number,
-    FragmentationBytes: number,
+	HotCount: number,
+	ColdCount: number,
+	PinnedCount: number,
+	BufferUsed: number,
+	BufferCapacity: number,
+	FragmentationBytes: number,
 })
-    local HotCount, ColdCount, PinnedCount = 0, 0, 0
-    for _, Tier in pairs(self._tier) do
-        if Tier == TierHot then HotCount += 1
-        elseif Tier == TierCold then ColdCount += 1
-        else PinnedCount += 1
-        end
-    end
-    local Cache = self._statsCache
-    Cache.HotCount = HotCount
-    Cache.ColdCount = ColdCount
-    Cache.PinnedCount = PinnedCount
-    Cache.BufferUsed = self._writeHead - self._freeBytes
-    Cache.BufferCapacity = buffer.len(self._coldBuffer)
-    Cache.FragmentationBytes = self._freeBytes
-    return Cache
+	if not self.Alive then error("[SecureStorage] Storage is destroyed.") end
+	local HotCount, ColdCount, PinnedCount = 0, 0, 0
+	for _, Tier in pairs(self._tier) do
+		if Tier == TierHot then HotCount += 1
+		elseif Tier == TierCold then ColdCount += 1
+		else PinnedCount += 1
+		end
+	end
+	local Cache = self._statsCache
+	Cache.HotCount = HotCount
+	Cache.ColdCount = ColdCount
+	Cache.PinnedCount = PinnedCount
+	Cache.BufferUsed = self._writeHead - self._freeBytes
+	Cache.BufferCapacity = buffer.len(self._coldBuffer)
+	Cache.FragmentationBytes = self._freeBytes
+	return Cache
+end
+
+function SecureStorage:Export(IncludeConfig: boolean?, Kill: boolean?): ({[string]: any}, StorageConfiguration?)
+	if not self.Alive then error("[SecureStorage] Storage is destroyed.") end
+	local Data = {}
+	for Key, Tier in pairs(self._tier) do
+		if Tier == TierCold then
+			Data[Key] = Decode(self._coldBuffer, self._coldIndex[Key])
+		else
+			Data[Key] = self._hotStore[Key]
+		end
+	end
+	local Config = if IncludeConfig then self._rawConfig else nil
+	if Kill then
+		SecureStorage.Destroy(self)
+	end
+	return Data, Config
 end
 
 function SecureStorage:Destroy(): ()
-	self._isDestroyed = true
+	if not self.Alive then return end
+	self.Alive = false
 	table.clear(self._hotStore)
 	table.clear(self._coldIndex)
 	table.clear(self._coldSize)
@@ -301,6 +328,7 @@ function SecureStorage:Destroy(): ()
 end
 
 export type SecureStorage = {
+	Alive: boolean,
 	Set: (self: SecureStorage, Key: string, Value: any) -> (),
 	Get: (self: SecureStorage, Key: string) -> (any),
 	Delete: (self: SecureStorage, Key: string) -> (),
@@ -317,12 +345,13 @@ export type SecureStorage = {
 		BufferCapacity: number,
 		FragmentationBytes: number,
 	}),
+	Export: (self: SecureStorage, IncludeConfig: boolean?, Kill: boolean?) -> ({[string]: any}, StorageConfiguration?),
 	Destroy: (self: SecureStorage) -> (),
 }
 
 local function ScheduleAutoFlush(Storage): ()
 	task.delay(Storage._config.FlushInterval, function()
-		if Storage._isDestroyed then return end
+		if not Storage.Alive then return end
 		SecureStorage.Flush(Storage)
 		ScheduleAutoFlush(Storage)
 	end)
@@ -333,6 +362,12 @@ SecureStorageImpl.__index = SecureStorage
 
 function SecureStorageImpl.new(StorageConfiguration: StorageConfiguration): (SecureStorage)
 	local Cfg = StorageConfiguration or {}
+	
+	local RawConfig = {}
+	for Key, Value in pairs(Cfg) do
+		RawConfig[Key] = Value
+	end
+	
 	local Config = table.freeze({
 		DataMigration = if Cfg.DataMigration ~= nil then Cfg.DataMigration else true,
 		BufferMigrationRequest = Cfg.BufferMigrationRequest or 3,
@@ -349,7 +384,9 @@ function SecureStorageImpl.new(StorageConfiguration: StorageConfiguration): (Sec
 	})
 	
 	local self = setmetatable({}, SecureStorageImpl)
+	self.Alive = true
 	self._config = Config
+	self._rawConfig = table.freeze(RawConfig)
 	self._hotStore = {}
 	self._coldBuffer = buffer.create(Config.BufferDefaultBudget)
 	self._coldIndex = {}
@@ -359,7 +396,6 @@ function SecureStorageImpl.new(StorageConfiguration: StorageConfiguration): (Sec
 	self._lastAccess = {}
 	self._writeHead = 0
 	self._freeBytes = 0
-	self._isDestroyed = false
 	self._statsCache = {
 		HotCount = 0,
 		ColdCount = 0,
