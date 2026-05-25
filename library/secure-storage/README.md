@@ -54,6 +54,24 @@ Creates a new tier-optimized storage container.
 
 ---
 
+# Properties
+
+## `Alive: boolean`
+
+Reflects the current liveness of the storage instance.
+
+Set to `true` on construction. Set to `false` permanently when the instance is destroyed, either by calling `:Destroy()` or by passing `Kill = true` to `:Export()`.
+
+All methods error if called on a dead instance. `Alive` remains readable after death because it is set before the instance is frozen.
+
+```lua
+if Storage.Alive then
+    Storage:Set("Key", 1)
+end
+```
+
+---
+
 # Methods
 
 ## `:Set(key: string, value: any): ()`
@@ -149,9 +167,44 @@ Returns real-time telemetry about the storage engine.
     HotCount = 120,
     ColdCount = 532,
     PinnedCount = 7,
-    BufferUsage = 0.73,
-    Fragmentation = 0.14,
+    BufferUsed = 4096,
+    BufferCapacity = 8192,
+    FragmentationBytes = 240,
 }
+```
+
+---
+
+## `:Export(includeConfig: boolean?, kill: boolean?): ({[string]: any}, StorageConfiguration?)`
+
+Exports all stored data as a flat key-value table. Decodes cold-tier values from the binary buffer so the result is a plain Lua table regardless of what tier each value was in.
+
+Optionally returns the original configuration as a second value, containing only the fields that were explicitly set when the instance was constructed — default-filled fields are omitted.
+
+If `kill` is `true`, the instance is permanently destroyed after the export data is captured, setting `Alive` to `false` and clearing all internal state.
+
+### Parameters
+
+| Parameter | Type | Description |
+|---|---|---|
+| `includeConfig` | `boolean?` | When `true`, returns the explicit-only config as the second return value. |
+| `kill` | `boolean?` | When `true`, destroys the instance after export. |
+
+### Returns
+
+| Position | Type | Description |
+|---|---|---|
+| 1 | `{[string]: any}` | All stored key-value pairs. |
+| 2 | `StorageConfiguration?` | Explicit config fields, or `nil` if `includeConfig` was not `true`. |
+
+### Example
+
+```lua
+local Data, Config = Storage:Export(true, true)
+
+-- Storage.Alive is now false
+-- Data contains every key that was in the storage
+-- Config contains only what was passed to .new()
 ```
 
 ---
@@ -160,7 +213,7 @@ Returns real-time telemetry about the storage engine.
 
 Destroys the storage instance permanently.
 
-This clears all memory structures, removes references, and freezes the instance.
+Sets `Alive` to `false`, clears all memory structures, removes the metatable, and freezes the instance. Safe to call more than once — subsequent calls are silently ignored.
 
 ---
 
@@ -189,20 +242,20 @@ type StorageConfiguration = {
 
 # Configuration Fields
 
-| Field | Type | Description |
-|---|---|---|
-| `DataMigration` | `boolean?` | Enables automatic hot/cold tier migration. |
-| `BufferMigrationRequest` | `number?` | Reads required before cold data is promoted to hot. |
-| `BufferMigrationResetTime` | `number?` | Time window in seconds before read counters reset. |
-| `BufferDefaultBudget` | `number?` | Initial binary buffer allocation size. |
-| `BufferBudgetAllocation` | `"Auto" \| "Manual"?` | Controls automatic buffer growth behavior. |
-| `StoreToBufferOnSet` | `boolean?` | Forces primitives into the cold buffer immediately on write. |
-| `TableMigrationTime` | `number?` | Idle duration before hot values migrate to cold storage. |
-| `MaxBudget` | `number?` | Hard memory allocation cap for the buffer. |
-| `CompactionThreshold` | `number?` | Fragmentation ratio that triggers automatic compaction. |
-| `FlushInterval` | `number?` | Background flush interval in seconds. |
-| `SmartShrink` | `boolean?` | Dynamically shrinks compacted buffer size based on usage. |
-| `ShrinkHeadroom` | `number?` | Reserved headroom percentage for smart shrinking. |
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `DataMigration` | `boolean?` | `true` | Enables automatic hot/cold tier migration. |
+| `BufferMigrationRequest` | `number?` | `3` | Reads required before cold data is promoted to hot. |
+| `BufferMigrationResetTime` | `number?` | `5` | Time window in seconds before read counters reset. |
+| `BufferDefaultBudget` | `number?` | `500` | Initial binary buffer allocation size in bytes. |
+| `BufferBudgetAllocation` | `"Auto" \| "Manual"?` | `"Manual"` | Controls automatic buffer growth behavior. |
+| `StoreToBufferOnSet` | `boolean?` | `false` | Forces primitives into the cold buffer immediately on write. |
+| `TableMigrationTime` | `number?` | `30` | Idle duration in seconds before hot values migrate to cold storage. |
+| `MaxBudget` | `number?` | `0` | Hard memory allocation cap for the buffer. `0` means no cap. |
+| `CompactionThreshold` | `number?` | `0.4` | Fragmentation ratio that triggers automatic compaction. |
+| `FlushInterval` | `number?` | `0` | Background flush interval in seconds. `0` disables auto-flush. |
+| `SmartShrink` | `boolean?` | `true` | Dynamically shrinks compacted buffer size based on usage. |
+| `ShrinkHeadroom` | `number?` | `0.1` | Reserved headroom percentage added during smart shrinking. |
 
 ---
 
@@ -219,14 +272,17 @@ local Storage = SecureStorage.new({
 })
 
 Storage:Set("Coins", 150)
+Storage:Set("Username", "Chandaek")
 
 print(Storage:Get("Coins"))
+print(Storage.Alive) -- true
+
+-- Export everything and shut the instance down
+local Data, Config = Storage:Export(true, true)
+
+print(Storage.Alive) -- false
+print(Data.Coins)    -- 150
+print(Config.BufferDefaultBudget) -- 4096
 ```
+
 ---
-
-<div align="center">
-
-Provided to [Chandaek/luau-toolkit](https://github.com/Chandaek/luau-toolkit) by `Chandaek@Home/Unknown v0.0`<br>
-(Content powered by [ChatGPT](https://chatgpt.com/))
-
-</div>
