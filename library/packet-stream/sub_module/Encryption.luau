@@ -1,6 +1,3 @@
---!native
---!strict
-
 local _rng = Random.new()
 
 local function _U32(Value: number): number
