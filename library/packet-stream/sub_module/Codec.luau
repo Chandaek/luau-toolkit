@@ -93,6 +93,12 @@ local function _ReadValue(Buf: buffer, Offset: number): (any, number)
 	error(`[PacketStream:Codec] Unknown tag: {Tag}`)
 end
 
+-- BatchEntry header layout (7 bytes):
+-- [0]     u8  PacketType
+-- [1..4]  u32 TopicId    <-- widened from u8 so now it support hash-based IDs
+-- [5..6]  u16 PacketId
+-- [7+]    var Data
+
 type BatchEntry = {
 	PacketType: number,
 	TopicId: number,
@@ -105,16 +111,16 @@ local Codec = {}
 function Codec.EncodeBatch(Entries: {BatchEntry}): (buffer)
 	local TotalSize = 2
 	for _, Entry in Entries do
-		TotalSize += 4 + _ValueSize(Entry.Data)
+		TotalSize += 7 + _ValueSize(Entry.Data)
 	end
 	local Buf = buffer.create(TotalSize)
 	buffer.writeu16(Buf, 0, #Entries)
 	local Offset = 2
 	for _, Entry in Entries do
 		buffer.writeu8(Buf, Offset, Entry.PacketType)
-		buffer.writeu8(Buf, Offset + 1, Entry.TopicId)
-		buffer.writeu16(Buf, Offset + 2, Entry.PacketId)
-		Offset = _WriteValue(Buf, Offset + 4, Entry.Data)
+		buffer.writeu32(Buf, Offset + 1, Entry.TopicId)
+		buffer.writeu16(Buf, Offset + 5, Entry.PacketId)
+		Offset = _WriteValue(Buf, Offset + 7, Entry.Data)
 	end
 	return Buf
 end
@@ -125,9 +131,9 @@ function Codec.DecodeBatch(Buf: buffer): ({BatchEntry})
 	local Offset = 2
 	for Index = 1, Count do
 		local PacketType = buffer.readu8(Buf, Offset)
-		local TopicId = buffer.readu8(Buf, Offset + 1)
-		local PacketId = buffer.readu16(Buf, Offset + 2)
-		local Data, Next = _ReadValue(Buf, Offset + 4)
+		local TopicId = buffer.readu32(Buf, Offset + 1)
+		local PacketId = buffer.readu16(Buf, Offset + 5)
+		local Data, Next = _ReadValue(Buf, Offset + 7)
 		Entries[Index] = {
 			PacketType = PacketType,
 			TopicId = TopicId,
@@ -163,7 +169,7 @@ end
 
 function Codec.SyncStateToFolder(Folder: Folder, NewState: {[string]: any}, OldState: {[string]: any}?): ()
 	local Old = OldState or {}
-	
+
 	for Key, OldValue in pairs(Old) do
 		if NewState[Key] == nil then
 			if type(OldValue) == "table" then
@@ -176,7 +182,7 @@ function Codec.SyncStateToFolder(Folder: Folder, NewState: {[string]: any}, OldS
 			end
 		end
 	end
-	
+
 	for Key, Value in pairs(NewState) do
 		if type(Value) == "table" then
 			local OldValue = Old[Key]
@@ -204,17 +210,17 @@ end
 
 function Codec.ReadStateFromFolder(Folder: Folder): ({[string]: any})
 	local State: {[string]: any} = {}
-	
+
 	for AttrName, AttrValue in pairs(Folder:GetAttributes()) do
 		State[AttrName] = AttrValue
 	end
-	
+
 	for _, Child in Folder:GetChildren() do
 		if Child:IsA("Folder") then
 			State[Child.Name] = Codec.ReadStateFromFolder(Child :: Folder)
 		end
 	end
-	
+
 	return State
 end
 
