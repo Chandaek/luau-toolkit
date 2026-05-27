@@ -247,16 +247,23 @@ local function _ResolveStreamerConfig(UserConfig: PacketStreamerConfiguration?, 
 	return Resolved
 end
 
+local function _FnvHash(Name: string): (number)
+	local Hash = 2166136261
+	for Index = 1, #Name do
+		Hash = bit32.bxor(Hash, string.byte(Name, Index))
+		Hash = bit32.band(Hash * 16777619, 0xFFFFFFFF)
+	end
+	return Hash
+end
+
 local function _CreateTopicRegistry(): (any)
 	local NameToId: {[string]: number} = {}
 	local IdToName: {[number]: string} = {}
-	local NextId = 0
 	return {
 		Register = function(Name: string): (number)
 			if NameToId[Name] then return NameToId[Name] end
-			assert(NextId <= 254, "[PacketStream] Topic limit reached (max 255)")
-			local Id = NextId
-			NextId += 1
+			local Id = _FnvHash(Name)
+			assert(not IdToName[Id], `[PacketStream] Topic hash collision: "{Name}" collides with "{IdToName[Id]}"`)
 			NameToId[Name] = Id
 			IdToName[Id] = Name
 			return Id
@@ -329,7 +336,7 @@ PacketStreamer.__index = PacketStreamer
 function PacketStreamer._Init(self, Name: string, Config: ResolvedStreamerConfig): ()
 	local Root = _GetRootFolder()
 	local StreamFolder: Folder
-	
+
 	if IsServer then
 		StreamFolder = Instance.new("Folder") :: Folder
 		StreamFolder.Name = "S_" .. Name
@@ -337,7 +344,7 @@ function PacketStreamer._Init(self, Name: string, Config: ResolvedStreamerConfig
 	else
 		StreamFolder = Root:WaitForChild("S_" .. Name) :: Folder
 	end
-	
+
 	self._config = Config
 	self._name = Name
 	self._emitter = EventEmitter.new()
@@ -353,15 +360,22 @@ function PacketStreamer._Init(self, Name: string, Config: ResolvedStreamerConfig
 	self._rateBucket = Config.RateLimit
 	self._defaultSendMode = Config.DefaultSendMode
 	self._defaultStreamMode = Config.DefaultStreamMode
-	
+	self._statsCache = {
+		IsInstancing = false,
+		RateBucket = 0,
+		OutboundTotal = 0,
+		PersistentTopics = 0,
+		ActiveStreams = 0,
+	}
+
 	self._remoteEvent = _GetOrCreateChild(StreamFolder, "Event", "RemoteEvent") :: RemoteEvent
 	self._remoteFunction = _GetOrCreateChild(StreamFolder, "Function", "RemoteFunction") :: RemoteFunction
-	
+
 	self._storage = nil
 	if Config.UseSecureStorage and SecureStorage then
 		self._storage = SecureStorage.new({})
 	end
-	
+
 	if IsServer then
 		self._outboundQueues = {} :: {[Player]: {QueueEntry}}
 		self._broadcastQueue = {} :: {QueueEntry}
@@ -369,20 +383,20 @@ function PacketStreamer._Init(self, Name: string, Config: ResolvedStreamerConfig
 		self._streamingEntries = {} :: {[Player]: {[number]: StreamingEntry}}
 		self._clientKeys = {} :: {[Player]: string}
 		self._pingProtocols = {} :: {[Player]: any}
-		
+
 		local InstancingFolder = _GetOrCreateChild(Root, "I_" .. Name, "Folder") :: Folder
 		self._instancingFolder = InstancingFolder
-		
+
 		local StreamingFolder = _GetOrCreateChild(Root, "St_" .. Name, "Folder") :: Folder
 		self._streamingRootFolder = StreamingFolder
-		
+
 		local PersistentFolder = _GetOrCreateChild(Root, "P_" .. Name, "Folder") :: Folder
 		self._persistentFolder = PersistentFolder
-		
+
 		self._remoteEvent.OnServerEvent:Connect(function(Player: Player, Buf: buffer)
 			PacketStreamer._ReceiveServer(self, Player, Buf)
 		end)
-		
+
 		self._remoteFunction.OnServerInvoke = function(_Player: Player, TopicName: string): ({[string]: any}?)
 			local TopicId = self._registry.Resolve(TopicName)
 			if not TopicId then return nil end
@@ -390,7 +404,7 @@ function PacketStreamer._Init(self, Name: string, Config: ResolvedStreamerConfig
 			if not Entry then return nil end
 			return Codec.ReadStateFromFolder(Entry.Folder)
 		end
-		
+
 		if Config.ConnectionPing then
 			local UnreliableRemote = _GetOrCreateChild(StreamFolder, "Ping", "UnreliableRemoteEvent") :: UnreliableRemoteEvent
 			self._unreliableRemote = UnreliableRemote
@@ -398,11 +412,11 @@ function PacketStreamer._Init(self, Name: string, Config: ResolvedStreamerConfig
 				PacketStreamer._ReceiveServerPing(self, Player, Buf)
 			end)
 		end
-		
+
 		Players.PlayerAdded:Connect(function(Player: Player)
 			PacketStreamer._OnPlayerAdded(self, Player)
 		end)
-		
+
 		Players.PlayerRemoving:Connect(function(Player: Player)
 			PacketStreamer._OnPlayerRemoving(self, Player)
 		end)
@@ -415,11 +429,11 @@ function PacketStreamer._Init(self, Name: string, Config: ResolvedStreamerConfig
 		})
 		self._clientKey = nil :: string?
 		self._myStreamingFolder = nil :: Folder?
-		
+
 		self._remoteEvent.OnClientEvent:Connect(function(Buf: buffer)
 			PacketStreamer._ReceiveClient(self, Buf)
 		end)
-		
+
 		if Config.ConnectionPing then
 			local UnreliableRemote = StreamFolder:WaitForChild("Ping") :: UnreliableRemoteEvent
 			self._unreliableRemote = UnreliableRemote
@@ -427,14 +441,14 @@ function PacketStreamer._Init(self, Name: string, Config: ResolvedStreamerConfig
 				PacketStreamer._ReceiveClientPing(self, Buf)
 			end)
 		end
-		
+
 		if Config.InstancingStream then
 			PacketStreamer._ListenInstancing(self)
 		end
-		
+
 		PacketStreamer._ListenStreaming(self)
 	end
-	
+
 	self._heartbeatConnection = RunService.Heartbeat:Connect(function(DeltaTime: number)
 		PacketStreamer._OnHeartbeat(self, DeltaTime)
 	end)
@@ -444,29 +458,29 @@ function PacketStreamer._OnPlayerAdded(self, Player: Player): ()
 	local Key = Encryption.GenerateKey()
 	self._clientKeys[Player] = Key
 	Encryption.RegisterClient(Player, Key)
-	
+
 	self._pingProtocols[Player] = PingProtocol.new({
 		PingInterval = self._config.PingInterval,
 		MaxRetryCount = self._config.MaxRetryCount,
 		DeadPacketWarn = self._config.DeadPacketWarn,
 	})
-	
+
 	local PlayerStreamFolder = Instance.new("Folder")
 	PlayerStreamFolder.Name = tostring(Player.UserId)
 	PlayerStreamFolder:SetAttribute("Owner", Player.UserId)
 	PlayerStreamFolder.Parent = self._streamingRootFolder
-	
+
 	if not self._outboundQueues[Player] then
 		self._outboundQueues[Player] = {}
 	end
-	
+
 	table.insert(self._outboundQueues[Player], {
 		PacketType = PacketTypeKeyDelivery,
 		TopicId = 0,
 		PacketId = 0,
 		Data = Key,
 	})
-	
+
 	for TopicId, Entry in pairs(self._persistentEntries) do
 		local TopicName = self._registry.ResolveName(TopicId)
 		if TopicName then
@@ -487,7 +501,7 @@ function PacketStreamer._OnPlayerRemoving(self, Player: Player): ()
 	self._pingProtocols[Player] = nil
 	self._clientKeys[Player] = nil
 	Encryption.RemoveClient(Player)
-	
+
 	local PlayerFolder = self._streamingRootFolder:FindFirstChild(tostring(Player.UserId))
 	if PlayerFolder then
 		PlayerFolder:Destroy()
@@ -498,7 +512,7 @@ function PacketStreamer._ListenInstancing(self): ()
 	local Root = _GetRootFolder()
 	local InstancingFolder = Root:WaitForChild("I_" .. self._name) :: Folder
 	local LocalUserId = Players.LocalPlayer.UserId
-	
+
 	InstancingFolder.ChildAdded:Connect(function(Child: Instance)
 		if not Child:IsA("StringValue") then return end
 		local Separator = string.find(Child.Name, "|")
@@ -507,13 +521,13 @@ function PacketStreamer._ListenInstancing(self): ()
 		local TopicId = tonumber(string.sub(Child.Name, Separator + 1))
 		if not TargetUserId or not TopicId then return end
 		if TargetUserId ~= 0 and TargetUserId ~= LocalUserId then return end
-		
+
 		local Raw = (Child :: StringValue).Value
 		local Buf = Codec.StringToBuffer(Raw)
 		local Data = Codec.DecodeValue(Buf)
 		local TopicName = self._registry.ResolveName(TopicId)
 		if not TopicName then return end
-		
+
 		self._emitter:Fire("Packet", TopicName, Data)
 		self._emitter:Fire(TopicName, Data)
 	end)
@@ -522,42 +536,42 @@ end
 function PacketStreamer._ListenStreaming(self): ()
 	local Root = _GetRootFolder()
 	local StreamingRoot = Root:WaitForChild("St_" .. self._name) :: Folder
-	
+
 	StreamingRoot.ChildAdded:Connect(function(PlayerFolder: Instance)
 		if not PlayerFolder:IsA("Folder") then return end
 		local OwnerUserId = PlayerFolder:GetAttribute("Owner")
 		if OwnerUserId ~= Players.LocalPlayer.UserId then return end
-		
+
 		self._myStreamingFolder = PlayerFolder :: Folder
-		
+
 		PlayerFolder.AttributeChanged:Connect(function(AttributeName: string)
 			local Value = PlayerFolder:GetAttribute(AttributeName)
 			if type(Value) ~= "string" then return end
-			
+
 			local Decrypted = Value
 			if self._clientKey then
 				Decrypted = Encryption.Decrypt(Value, self._clientKey, 0)
 			end
-			
+
 			local Buf = Codec.StringToBuffer(Decrypted)
 			local TopicId = tonumber(AttributeName)
 			if not TopicId then return end
 			local Data = Codec.DecodeValue(Buf)
 			local TopicName = self._registry.ResolveName(TopicId)
 			if not TopicName then return end
-			
+
 			self._emitter:Fire("StreamingPacket", TopicName, Data)
 			self._emitter:Fire(TopicName, Data)
 		end)
 	end)
 
 	local PersistentRoot = Root:WaitForChild("P_" .. self._name) :: Folder
-	
+
 	PersistentRoot.ChildAdded:Connect(function(TopicFolder: Instance)
 		if not TopicFolder:IsA("Folder") then return end
 		local TopicId = tonumber(TopicFolder.Name)
 		if not TopicId then return end
-		
+
 		local function _OnChange()
 			local State = Codec.ReadStateFromFolder(TopicFolder :: Folder)
 			local TopicName = self._registry.ResolveName(TopicId)
@@ -565,12 +579,12 @@ function PacketStreamer._ListenStreaming(self): ()
 			self._emitter:Fire("PersistentPacket", TopicName, State)
 			self._emitter:Fire(TopicName, State)
 		end
-		
+
 		TopicFolder.AttributeChanged:Connect(_OnChange)
 		TopicFolder.ChildAdded:Connect(_OnChange)
 		TopicFolder.ChildRemoved:Connect(_OnChange)
 	end)
-	
+
 	PersistentRoot.ChildRemoved:Connect(function(TopicFolder: Instance)
 		local TopicId = tonumber(TopicFolder.Name)
 		if not TopicId then return end
@@ -607,10 +621,10 @@ function PacketStreamer._ReceiveClient(self, Buf: buffer): ()
 			}))
 			continue
 		end
-		
+
 		local TopicName = self._registry.ResolveName(Entry.TopicId)
 		if not TopicName then continue end
-		
+
 		if Entry.PacketType == PacketTypePersistentFull then
 			self._emitter:Fire("PersistentPacket", TopicName, Entry.Data)
 			self._emitter:Fire(TopicName, Entry.Data)
@@ -627,11 +641,11 @@ function PacketStreamer._ReceiveServerPing(self, Player: Player, Buf: buffer): (
 	local AckEntries, FlagBytes = PingProtocol.DecodePing(Buf)
 	local Protocol = self._pingProtocols[Player]
 	if not Protocol then return end
-	
+
 	if FlagBytes ~= "" then
 		self._flagSchema:Unpack(FlagBytes)
 	end
-	
+
 	Protocol:ReceiveAcks(AckEntries,
 		function(PacketId: number, Data: any)
 			if not self._outboundQueues[Player] then
@@ -700,11 +714,11 @@ function PacketStreamer._FlushStreamingEntries(self): ()
 	for Player, TopicMap in pairs(self._streamingEntries) do
 		local PlayerFolder = self._streamingRootFolder:FindFirstChild(tostring(Player.UserId))
 		if not PlayerFolder then continue end
-		
+
 		for TopicId, Entry in pairs(TopicMap) do
 			local Buf = Codec.EncodeValue(Entry.Data)
 			local Raw = Codec.BufferToString(Buf)
-			
+
 			if Entry.Mode == SendModeInstancing then
 				local Key = self._clientKeys[Player]
 				if Key then
@@ -729,11 +743,11 @@ end
 function PacketStreamer._FlushServer(self): ()
 	local BroadcastBatch = self._broadcastQueue
 	self._broadcastQueue = {}
-	
+
 	for _, Player in Players:GetPlayers() do
 		local PlayerBatch = self._outboundQueues[Player]
 		self._outboundQueues[Player] = {}
-		
+
 		local Merged: {QueueEntry} = {}
 		for _, Entry in BroadcastBatch do
 			table.insert(Merged, Entry)
@@ -743,9 +757,9 @@ function PacketStreamer._FlushServer(self): ()
 				table.insert(Merged, Entry)
 			end
 		end
-		
+
 		if #Merged == 0 then continue end
-		
+
 		local Instancing: {QueueEntry} = {}
 		local Normal: {QueueEntry} = {}
 		for _, Entry in Merged do
@@ -760,11 +774,11 @@ function PacketStreamer._FlushServer(self): ()
 				end
 			end
 		end
-		
+
 		if #Normal > 0 then
 			self._remoteEvent:FireClient(Player, Codec.EncodeBatch(Normal))
 		end
-		
+
 		for _, Entry in Instancing do
 			PacketStreamer._FireInstancing(self, Player, Entry.TopicId, Entry.Data, true)
 		end
@@ -781,7 +795,7 @@ end
 function PacketStreamer._TickPings(self, DeltaMs: number): ()
 	if not self._config.ConnectionPing then return end
 	if not self._unreliableRemote then return end
-	
+
 	if IsServer then
 		local FlagBytes = self._flagSchema:IsLocked() and self._flagSchema:Pack() or ""
 		for _, Player in Players:GetPlayers() do
@@ -815,12 +829,12 @@ function PacketStreamer._CheckRotation(self, DeltaMs: number): ()
 	if self._rotationElapsed < self._config.KeyRotationCooldown then return end
 	self._pendingRotation = false
 	self._rotationElapsed = 0
-	
+
 	for _, Player in Players:GetPlayers() do
 		local NewKey = Encryption.GenerateKey()
 		self._clientKeys[Player] = NewKey
 		Encryption.RegisterClient(Player, NewKey)
-		
+
 		if not self._outboundQueues[Player] then
 			self._outboundQueues[Player] = {}
 		end
@@ -835,10 +849,10 @@ end
 
 function PacketStreamer._OnHeartbeat(self, DeltaTime: number): ()
 	if self._isDestroyed then return end
-	
+
 	local FrameMs = DeltaTime * 1000
 	local Config = self._config
-	
+
 	if Config.AutoInstancingStream > 0 and IsServer then
 		local ShouldInstance = FrameMs > Config.AutoInstancingStream
 		if ShouldInstance ~= self._isInstancing then
@@ -846,21 +860,21 @@ function PacketStreamer._OnHeartbeat(self, DeltaTime: number): ()
 			self._emitter:Fire("StreamMode", ShouldInstance and "Instancing" or "Normal")
 		end
 	end
-	
+
 	self._rateBucket = math.min(Config.RateLimit, self._rateBucket + Config.RateLimit * DeltaTime)
 	self._elapsed += FrameMs
-	
+
 	PacketStreamer._TickPings(self, FrameMs)
-	
+
 	if Config.StreamInterval > 0 and self._elapsed < Config.StreamInterval then return end
 	self._elapsed = 0
-	
+
 	if self._rateBucket < 1 then
 		self._emitter:Fire("RateLimited")
 		return
 	end
 	self._rateBucket -= 1
-	
+
 	if IsServer then
 		self._persistentElapsed += FrameMs
 		if Config.PersistentStreamInterval == 0 or self._persistentElapsed >= Config.PersistentStreamInterval then
@@ -922,12 +936,12 @@ function PacketStreamer:SendTo(Player: Player, Topic: string, Data: any, Mode: S
 	assert(IsServer, "[PacketStream] SendTo is server-only")
 	local UseMode = Mode or self._defaultSendMode
 	local TopicId = self._registry.Register(Topic)
-	
+
 	if UseMode == SendModeInstancing then
 		PacketStreamer._FireInstancing(self, Player, TopicId, Data, true)
 		return
 	end
-	
+
 	if not self._outboundQueues[Player] then
 		self._outboundQueues[Player] = {}
 	end
@@ -963,7 +977,7 @@ function PacketStreamer:SetPersistent(Topic: string, State: {[string]: any}): ()
 	assert(IsServer, "[PacketStream] SetPersistent is server-only")
 	local TopicId = self._registry.Register(Topic)
 	local Existing = self._persistentEntries[TopicId]
-	
+
 	if Existing then
 		local OldState = Codec.ReadStateFromFolder(Existing.Folder)
 		Codec.SyncStateToFolder(Existing.Folder, State, OldState)
@@ -994,11 +1008,11 @@ function PacketStreamer:StartStream(Player: Player, Topic: string, InitialData: 
 	assert(IsServer, "[PacketStream] StartStream is server-only")
 	local UseMode = Mode or self._defaultStreamMode
 	local TopicId = self._registry.Register(Topic)
-	
+
 	if not self._streamingEntries[Player] then
 		self._streamingEntries[Player] = {}
 	end
-	
+
 	local Entry: StreamingEntry = {
 		TopicId = TopicId,
 		Data = InitialData,
@@ -1006,18 +1020,18 @@ function PacketStreamer:StartStream(Player: Player, Topic: string, InitialData: 
 		PingProtocol = self._pingProtocols[Player],
 	}
 	self._streamingEntries[Player][TopicId] = Entry
-	
+
 	if not self._config.AllowManualStreamControl then
 		return nil
 	end
-	
+
 	local Handle = {}
-	
+
 	function Handle.Update(Data: any): ()
 		Entry.Data = Data
 		local Buf = Codec.EncodeValue(Data)
 		local Raw = Codec.BufferToString(Buf)
-		
+
 		if Entry.Mode == SendModeInstancing then
 			local PlayerFolder = self._streamingRootFolder:FindFirstChild(tostring(Player.UserId))
 			if PlayerFolder then
@@ -1039,7 +1053,7 @@ function PacketStreamer:StartStream(Player: Player, Topic: string, InitialData: 
 			})
 		end
 	end
-	
+
 	function Handle.Stop(): ()
 		if self._streamingEntries[Player] then
 			self._streamingEntries[Player][TopicId] = nil
@@ -1054,12 +1068,12 @@ function PacketStreamer:StartStream(Player: Player, Topic: string, InitialData: 
 			Data = nil,
 		})
 	end
-	
+
 	function Handle.SetMode(NewMode: SendMode): ()
 		Entry.Mode = NewMode
 		self._emitter:Fire("StreamModeChanged", Player, Topic, NewMode)
 	end
-	
+
 	return Handle
 end
 
@@ -1209,11 +1223,11 @@ end
 local function _ServiceFlushServer(): ()
 	local BroadcastBatch = _serviceBroadcastQueue
 	_serviceBroadcastQueue = {}
-	
+
 	for _, Player in Players:GetPlayers() do
 		local PlayerBatch = _serviceOutboundQueues[Player]
 		_serviceOutboundQueues[Player] = {}
-		
+
 		local Merged: {QueueEntry} = {}
 		for _, Entry in BroadcastBatch do
 			table.insert(Merged, Entry)
@@ -1223,9 +1237,9 @@ local function _ServiceFlushServer(): ()
 				table.insert(Merged, Entry)
 			end
 		end
-		
+
 		if #Merged == 0 then continue end
-		
+
 		local Instancing: {QueueEntry} = {}
 		local Normal: {QueueEntry} = {}
 		for _, Entry in Merged do
@@ -1237,11 +1251,11 @@ local function _ServiceFlushServer(): ()
 				table.insert(Normal, Entry)
 			end
 		end
-		
+
 		if #Normal > 0 then
 			_serviceRemoteEvent:FireClient(Player, Codec.EncodeBatch(Normal))
 		end
-		
+
 		for _, Entry in Instancing do
 			local InstanceName = tostring(Player.UserId) .. "|" .. tostring(Entry.TopicId)
 			local Key = _serviceClientKeys[Player]
@@ -1269,7 +1283,7 @@ end
 local function _ServiceTickPings(DeltaMs: number): ()
 	if not _serviceConfig.ConnectionPing then return end
 	if not _serviceUnreliableRemote then return end
-	
+
 	if IsServer then
 		local FlagBytes = _serviceFlagSchema:IsLocked() and _serviceFlagSchema:Pack() or ""
 		for _, Player in Players:GetPlayers() do
@@ -1300,7 +1314,7 @@ end
 local function _ServiceOnHeartbeat(DeltaTime: number): ()
 	local FrameMs = DeltaTime * 1000
 	local Config = _serviceConfig
-	
+
 	if Config.AutoInstancingStream > 0 and IsServer then
 		local ShouldInstance = FrameMs > Config.AutoInstancingStream
 		if ShouldInstance ~= _serviceIsInstancing then
@@ -1308,25 +1322,25 @@ local function _ServiceOnHeartbeat(DeltaTime: number): ()
 			_serviceEmitter:Fire("StreamMode", ShouldInstance and "Instancing" or "Normal")
 		end
 	end
-	
+
 	_serviceRateBucket = math.min(Config.RateLimit, _serviceRateBucket + Config.RateLimit * DeltaTime)
 	_serviceElapsed += FrameMs
-	
+
 	_ServiceTickPings(FrameMs)
-	
+
 	if Config.StreamInterval > 0 and _serviceElapsed < Config.StreamInterval then return end
 	_serviceElapsed = 0
-	
+
 	if _serviceRateBucket < 1 then
 		_serviceEmitter:Fire("RateLimited")
 		return
 	end
 	_serviceRateBucket -= 1
-	
+
 	if IsServer then
 		_ServiceFlushStreamingEntries()
 		_ServiceFlushServer()
-		
+
 		if Encryption.TickRotation(FrameMs, Config.KeyRotationCooldown) then
 			for _, Player in Players:GetPlayers() do
 				local NewKey = Encryption.GenerateKey()
@@ -1352,29 +1366,29 @@ local function _ServiceOnPlayerAdded(Player: Player): ()
 	local Key = Encryption.GenerateKey()
 	_serviceClientKeys[Player] = Key
 	Encryption.RegisterClient(Player, Key)
-	
+
 	_servicePingProtocols[Player] = PingProtocol.new({
 		PingInterval = _serviceConfig.PingInterval,
 		MaxRetryCount = _serviceConfig.MaxRetryCount,
 		DeadPacketWarn = _serviceConfig.DeadPacketWarn,
 	})
-	
+
 	local PlayerStreamFolder = Instance.new("Folder")
 	PlayerStreamFolder.Name = tostring(Player.UserId)
 	PlayerStreamFolder:SetAttribute("Owner", Player.UserId)
 	PlayerStreamFolder.Parent = _serviceStreamingRootFolder
-	
+
 	if not _serviceOutboundQueues[Player] then
 		_serviceOutboundQueues[Player] = {}
 	end
-	
+
 	table.insert(_serviceOutboundQueues[Player], {
 		PacketType = PacketTypeKeyDelivery,
 		TopicId = 0,
 		PacketId = 0,
 		Data = Key,
 	})
-	
+
 	for TopicId, Entry in pairs(_servicePersistentEntries) do
 		local CurrentState = Codec.ReadStateFromFolder(Entry.Folder)
 		table.insert(_serviceOutboundQueues[Player], {
@@ -1384,7 +1398,7 @@ local function _ServiceOnPlayerAdded(Player: Player): ()
 			Data = CurrentState,
 		})
 	end
-	
+
 	Encryption.RequestRotation()
 end
 
@@ -1394,12 +1408,12 @@ local function _ServiceOnPlayerRemoving(Player: Player): ()
 	_servicePingProtocols[Player] = nil
 	_serviceClientKeys[Player] = nil
 	Encryption.RemoveClient(Player)
-	
+
 	local PlayerFolder = _serviceStreamingRootFolder:FindFirstChild(tostring(Player.UserId))
 	if PlayerFolder then
 		PlayerFolder:Destroy()
 	end
-	
+
 	Encryption.RequestRotation()
 end
 
@@ -1484,7 +1498,7 @@ end
 function PacketStreamService.Configure(UserConfig: PacketStreamServiceConfiguration): ()
 	assert(not _serviceInitialized, "[PacketStream] Configure must be called before first use")
 	_serviceInitialized = true
-	
+
 	local Cfg = UserConfig or {}
 	_serviceConfig = table.freeze({
 		InstancingStream = if Cfg.InstancingStream ~= nil then Cfg.InstancingStream else ServiceDefaults.InstancingStream,
@@ -1507,30 +1521,30 @@ function PacketStreamService.Configure(UserConfig: PacketStreamServiceConfigurat
 		DefaultSendMode = if Cfg.DefaultSendMode ~= nil then Cfg.DefaultSendMode else ServiceDefaults.DefaultSendMode,
 		DefaultStreamMode = if Cfg.DefaultStreamMode ~= nil then Cfg.DefaultStreamMode else ServiceDefaults.DefaultStreamMode,
 	})
-	
+
 	if _serviceConfig.UseSecureStorage and not SecureStorage then
 		warn("[PacketStream] UseSecureStorage is true but SecureStorage dependency was not found")
 	end
-	
+
 	_serviceEmitter = EventEmitter.new()
 	_serviceRegistry = _CreateTopicRegistry()
 	_serviceFlagSchema = FlagSchema.new()
 	_serviceRateBucket = _serviceConfig.RateLimit
 	_serviceDefaultSendMode = _serviceConfig.DefaultSendMode
 	_serviceDefaultStreamMode = _serviceConfig.DefaultStreamMode
-	
+
 	if _serviceConfig.UseSecureStorage and SecureStorage then
 		_serviceStorage = SecureStorage.new({})
 	end
-	
+
 	local Root = _GetRootFolder()
 	local ServiceFolder: Folder
-	
+
 	if IsServer then
 		ServiceFolder = Instance.new("Folder") :: Folder
 		ServiceFolder.Name = "S__Global"
 		ServiceFolder.Parent = Root
-		
+
 		_servicePersistentFolder = _GetOrCreateChild(Root, "P__Global", "Folder") :: Folder
 		_serviceStreamingRootFolder = _GetOrCreateChild(Root, "St__Global", "Folder") :: Folder
 		_serviceInstancingFolder = _GetOrCreateChild(Root, "I__Global", "Folder") :: Folder
@@ -1540,10 +1554,10 @@ function PacketStreamService.Configure(UserConfig: PacketStreamServiceConfigurat
 		_serviceStreamingRootFolder = Root:WaitForChild("St__Global") :: Folder
 		_serviceInstancingFolder = Root:WaitForChild("I__Global") :: Folder
 	end
-	
+
 	_serviceRemoteEvent = _GetOrCreateChild(ServiceFolder, "Event", "RemoteEvent") :: RemoteEvent
 	_serviceRemoteFunction = _GetOrCreateChild(ServiceFolder, "Function", "RemoteFunction") :: RemoteFunction
-	
+
 	if IsServer then
 		_serviceRemoteEvent.OnServerEvent:Connect(_ServiceReceiveServer)
 		_serviceRemoteFunction.OnServerInvoke = function(_Player: Player, TopicName: string): ({[string]: any}?)
@@ -1553,12 +1567,12 @@ function PacketStreamService.Configure(UserConfig: PacketStreamServiceConfigurat
 			if not Entry then return nil end
 			return Codec.ReadStateFromFolder(Entry.Folder)
 		end
-		
+
 		if _serviceConfig.ConnectionPing then
 			_serviceUnreliableRemote = _GetOrCreateChild(ServiceFolder, "Ping", "UnreliableRemoteEvent") :: UnreliableRemoteEvent
 			_serviceUnreliableRemote.OnServerEvent:Connect(_ServiceReceiveServerPing)
 		end
-		
+
 		Players.PlayerAdded:Connect(_ServiceOnPlayerAdded)
 		Players.PlayerRemoving:Connect(_ServiceOnPlayerRemoving)
 	else
@@ -1567,16 +1581,16 @@ function PacketStreamService.Configure(UserConfig: PacketStreamServiceConfigurat
 			MaxRetryCount = _serviceConfig.MaxRetryCount,
 			DeadPacketWarn = _serviceConfig.DeadPacketWarn,
 		})
-		
+
 		_serviceRemoteEvent.OnClientEvent:Connect(_ServiceReceiveClient)
-		
+
 		if _serviceConfig.ConnectionPing then
 			_serviceUnreliableRemote = ServiceFolder:WaitForChild("Ping") :: UnreliableRemoteEvent
 			_serviceUnreliableRemote.OnClientEvent:Connect(_ServiceReceiveClientPing)
 		end
-		
+
 		local LocalUserId = Players.LocalPlayer.UserId
-		
+
 		_serviceInstancingFolder.ChildAdded:Connect(function(Child: Instance)
 			if not Child:IsA("StringValue") then return end
 			local Separator = string.find(Child.Name, "|")
@@ -1585,7 +1599,7 @@ function PacketStreamService.Configure(UserConfig: PacketStreamServiceConfigurat
 			local TopicId = tonumber(string.sub(Child.Name, Separator + 1))
 			if not TargetUserId or not TopicId then return end
 			if TargetUserId ~= LocalUserId then return end
-			
+
 			local Raw = (Child :: StringValue).Value
 			local Buf = Codec.StringToBuffer(Raw)
 			local Data = Codec.DecodeValue(Buf)
@@ -1594,12 +1608,12 @@ function PacketStreamService.Configure(UserConfig: PacketStreamServiceConfigurat
 			_serviceEmitter:Fire("Packet", TopicName, Data)
 			_serviceEmitter:Fire(TopicName, Data)
 		end)
-		
+
 		_serviceStreamingRootFolder.ChildAdded:Connect(function(PlayerFolder: Instance)
 			if not PlayerFolder:IsA("Folder") then return end
 			local OwnerUserId = PlayerFolder:GetAttribute("Owner")
 			if OwnerUserId ~= LocalUserId then return end
-			
+
 			PlayerFolder.AttributeChanged:Connect(function(AttributeName: string)
 				local Value = PlayerFolder:GetAttribute(AttributeName)
 				if type(Value) ~= "string" then return end
@@ -1613,12 +1627,12 @@ function PacketStreamService.Configure(UserConfig: PacketStreamServiceConfigurat
 				_serviceEmitter:Fire(TopicName, Data)
 			end)
 		end)
-		
+
 		_servicePersistentFolder.ChildAdded:Connect(function(TopicFolder: Instance)
 			if not TopicFolder:IsA("Folder") then return end
 			local TopicId = tonumber(TopicFolder.Name)
 			if not TopicId then return end
-			
+
 			local function _OnChange()
 				local State = Codec.ReadStateFromFolder(TopicFolder :: Folder)
 				local TopicName = _serviceRegistry.ResolveName(TopicId)
@@ -1626,12 +1640,12 @@ function PacketStreamService.Configure(UserConfig: PacketStreamServiceConfigurat
 				_serviceEmitter:Fire("PersistentPacket", TopicName, State)
 				_serviceEmitter:Fire(TopicName, State)
 			end
-			
+
 			TopicFolder.AttributeChanged:Connect(_OnChange)
 			TopicFolder.ChildAdded:Connect(_OnChange)
 			TopicFolder.ChildRemoved:Connect(_OnChange)
 		end)
-		
+
 		_servicePersistentFolder.ChildRemoved:Connect(function(TopicFolder: Instance)
 			local TopicId = tonumber(TopicFolder.Name)
 			if not TopicId then return end
@@ -1640,7 +1654,7 @@ function PacketStreamService.Configure(UserConfig: PacketStreamServiceConfigurat
 			_serviceEmitter:Fire("PersistentRemoved", TopicName)
 		end)
 	end
-	
+
 	RunService.Heartbeat:Connect(_ServiceOnHeartbeat)
 	_serviceFlagSchema:ValidateSecurity()
 end
@@ -1704,7 +1718,7 @@ function PacketStreamService.SendTo(Player: Player, Topic: string, Data: any, Mo
 	assert(IsServer, "[PacketStream] SendTo is server-only")
 	local UseMode = Mode or _serviceDefaultSendMode
 	local TopicId = _serviceRegistry.Register(Topic)
-	
+
 	if UseMode == SendModeInstancing then
 		local Key = _serviceClientKeys[Player]
 		local Buf = Codec.EncodeValue(Data)
@@ -1720,7 +1734,7 @@ function PacketStreamService.SendTo(Player: Player, Topic: string, Data: any, Mo
 		Debris:AddItem(Container, 2)
 		return
 	end
-	
+
 	if not _serviceOutboundQueues[Player] then
 		_serviceOutboundQueues[Player] = {}
 	end
@@ -1786,16 +1800,16 @@ function PacketStreamService.RemovePersistent(Topic: string): ()
 	_servicePersistentEntries[TopicId] = nil
 end
 
-function PacketStreamService.StartStream(Player: Player, Topic: string, InitialData: any, : SendMode?): (StreamHandle?)
+function PacketStreamService.StartStream(Player: Player, Topic: string, InitialData: any, Mode: SendMode?): (StreamHandle?)
 	_EnsureInitialized()
 	assert(IsServer, "[PacketStream] StartStream is server-only")
 	local UseMode = Mode or _serviceDefaultStreamMode
 	local TopicId = _serviceRegistry.Register(Topic)
-	
+
 	if not _serviceStreamingEntries[Player] then
 		_serviceStreamingEntries[Player] = {}
 	end
-	
+
 	local Entry: StreamingEntry = {
 		TopicId = TopicId,
 		Data = InitialData,
@@ -1803,18 +1817,18 @@ function PacketStreamService.StartStream(Player: Player, Topic: string, InitialD
 		PingProtocol = _servicePingProtocols[Player],
 	}
 	_serviceStreamingEntries[Player][TopicId] = Entry
-	
+
 	if not _serviceConfig.AllowManualStreamControl then
 		return nil
 	end
-	
+
 	local Handle = {}
-	
+
 	function Handle.Update(Data: any): ()
 		Entry.Data = Data
 		local Buf = Codec.EncodeValue(Data)
 		local Raw = Codec.BufferToString(Buf)
-		
+
 		if Entry.Mode == SendModeInstancing then
 			local PlayerFolder = _serviceStreamingRootFolder:FindFirstChild(tostring(Player.UserId))
 			if PlayerFolder then
@@ -1836,7 +1850,7 @@ function PacketStreamService.StartStream(Player: Player, Topic: string, InitialD
 			})
 		end
 	end
-	
+
 	function Handle.Stop(): ()
 		if _serviceStreamingEntries[Player] then
 			_serviceStreamingEntries[Player][TopicId] = nil
@@ -1851,12 +1865,12 @@ function PacketStreamService.StartStream(Player: Player, Topic: string, InitialD
 			Data = nil,
 		})
 	end
-	
+
 	function Handle.SetMode(NewMode: SendMode): ()
 		Entry.Mode = NewMode
 		_serviceEmitter:Fire("StreamModeChanged", Player, Topic, NewMode)
 	end
-	
+
 	return Handle
 end
 
@@ -1920,7 +1934,7 @@ end
 function PacketStreamService.new(Name: string, UserConfig: PacketStreamerConfiguration?): (PacketStreamer)
 	_EnsureInitialized()
 	assert(_serviceConfig.AllowIndependentStream, "[PacketStream] AllowIndependentStream is disabled")
-	
+
 	local Fallback: ResolvedStreamerConfig
 	if _serviceConfig.IndependentInheritance then
 		Fallback = {
@@ -1944,7 +1958,7 @@ function PacketStreamService.new(Name: string, UserConfig: PacketStreamerConfigu
 	else
 		Fallback = StreamerDefaults
 	end
-	
+
 	local ResolvedConfig = _ResolveStreamerConfig(UserConfig, Fallback)
 	local self = setmetatable({}, PacketStreamService)
 	self._statsCache = {
