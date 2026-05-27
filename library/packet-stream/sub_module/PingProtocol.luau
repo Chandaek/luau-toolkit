@@ -7,7 +7,9 @@ local StatusGotAck = 4
 type PendingEntry = {
 	Data: any,
 	Retries: number,
-	WaitingMs: number,
+	ElapsedMs: number,
+	RetryAfterMs: number,
+	SentAt: number,
 	DeadWarned: boolean,
 	State: number,
 }
@@ -21,6 +23,10 @@ type PingProtocolConfig = {
 	PingInterval: number,
 	MaxRetryCount: number,
 	DeadPacketWarn: number,
+	BackoffFactor: number?,
+	MaxRetryInterval: number?,
+	RttAlpha: number?,
+	RttBetaJitter: number?,
 }
 
 type ResendCallback = (PacketId: number, Data: any) -> ()
@@ -37,6 +43,12 @@ function PingProtocol.new(Config: PingProtocolConfig): (any)
 	self._outboundAcks = {} :: {AckEntry}
 	self._elapsed = 0
 	self._nextId = 0
+	self._smoothedRtt = Config.PingInterval * 2
+	self._rttVariance = Config.PingInterval
+	self._backoffFactor = Config.BackoffFactor or 2.0
+	self._maxRetryInterval = Config.MaxRetryInterval or 5000
+	self._rttAlpha = Config.RttAlpha or 0.125
+	self._rttBeta = Config.RttBetaJitter or 0.25
 	return self
 end
 
@@ -44,6 +56,19 @@ function PingProtocol._AllocateId(self): (number)
 	local Id = self._nextId
 	self._nextId = (self._nextId + 1) % 65536
 	return Id
+end
+
+function PingProtocol._ComputeRto(self): (number)
+	return math.min(
+		self._smoothedRtt + math.max(1, 4 * self._rttVariance),
+		self._maxRetryInterval
+	)
+end
+
+function PingProtocol._UpdateRtt(self, SampleMs: number): ()
+	local Error = math.abs(self._smoothedRtt - SampleMs)
+	self._smoothedRtt = (1 - self._rttAlpha) * self._smoothedRtt + self._rttAlpha * SampleMs
+	self._rttVariance = (1 - self._rttBeta) * self._rttVariance + self._rttBeta * Error
 end
 
 function PingProtocol.EncodePing(AckEntries: {AckEntry}, FlagBytes: string): (buffer)
@@ -85,7 +110,9 @@ function PingProtocol:TrackOutbound(Data: any): (number)
 	self._outboundPending[Id] = {
 		Data = Data,
 		Retries = 0,
-		WaitingMs = 0,
+		ElapsedMs = 0,
+		RetryAfterMs = PingProtocol._ComputeRto(self),
+		SentAt = os.clock(),
 		DeadWarned = false,
 		State = StatusDelivered,
 	}
@@ -101,7 +128,7 @@ function PingProtocol:ReceiveAcks(AckEntries: {AckEntry}, OnResend: ResendCallba
 	for _, Entry in AckEntries do
 		local PacketId = Entry.PacketId
 		local Status = Entry.Status
-		
+
 		if Status == StatusDelivered then
 			if self._inboundReceived[PacketId] then
 				self._inboundReceived[PacketId] = nil
@@ -120,9 +147,14 @@ function PingProtocol:ReceiveAcks(AckEntries: {AckEntry}, OnResend: ResendCallba
 			local Pending = self._outboundPending[PacketId]
 			if Pending then
 				Pending.State = StatusDelivered
-				Pending.WaitingMs = 0
+				Pending.ElapsedMs = 0
 			end
 		elseif Status == StatusGot then
+			local Pending = self._outboundPending[PacketId]
+			if Pending then
+				local SampleMs = (os.clock() - Pending.SentAt) * 1000
+				PingProtocol._UpdateRtt(self, SampleMs)
+			end
 			self._outboundPending[PacketId] = nil
 			table.insert(self._outboundAcks, {PacketId = PacketId, Status = StatusGotAck})
 		elseif Status == StatusGotAck then
@@ -132,28 +164,25 @@ function PingProtocol:ReceiveAcks(AckEntries: {AckEntry}, OnResend: ResendCallba
 end
 
 function PingProtocol:Tick(DeltaMs: number, OnResend: ResendCallback, OnDrop: DropCallback): ({AckEntry})
-	self._elapsed += DeltaMs
-	if self._elapsed < self._config.PingInterval then
-		return {}
-	end
-	self._elapsed = 0
-	
 	local Config = self._config
 	local ToRemove = {}
-	
+
 	for PacketId, Pending in pairs(self._outboundPending) do
-		Pending.WaitingMs += Config.PingInterval
-		if Pending.WaitingMs < Config.PingInterval then
-			continue
-		end
-		Pending.WaitingMs = 0
+		Pending.ElapsedMs += DeltaMs
+		if Pending.ElapsedMs < Pending.RetryAfterMs then continue end
+		Pending.ElapsedMs = 0
 		Pending.Retries += 1
-		
+		Pending.RetryAfterMs = math.min(
+			Pending.RetryAfterMs * self._backoffFactor,
+			self._maxRetryInterval
+		)
+		Pending.SentAt = os.clock()
+
 		if Config.DeadPacketWarn > 0 and Pending.Retries >= Config.DeadPacketWarn and not Pending.DeadWarned then
 			Pending.DeadWarned = true
 			warn(`[PacketStream:PingProtocol] Packet {PacketId} retrying (attempt {Pending.Retries})`)
 		end
-		
+
 		if Config.MaxRetryCount > 0 and Pending.Retries >= Config.MaxRetryCount then
 			OnDrop(PacketId)
 			table.insert(ToRemove, PacketId)
@@ -161,14 +190,28 @@ function PingProtocol:Tick(DeltaMs: number, OnResend: ResendCallback, OnDrop: Dr
 			table.insert(self._outboundAcks, {PacketId = PacketId, Status = Pending.State})
 		end
 	end
-	
+
 	for _, PacketId in ToRemove do
 		self._outboundPending[PacketId] = nil
 	end
-	
+
+	self._elapsed += DeltaMs
+	if self._elapsed < Config.PingInterval then
+		return {}
+	end
+	self._elapsed = 0
+
 	local Snapshot = self._outboundAcks
 	self._outboundAcks = {}
 	return Snapshot
+end
+
+function PingProtocol:GetSmoothedRtt(): (number)
+	return self._smoothedRtt
+end
+
+function PingProtocol:GetRttVariance(): (number)
+	return self._rttVariance
 end
 
 return PingProtocol
