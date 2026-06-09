@@ -1,18 +1,33 @@
 <div align="center">
 
-# PacketStreamService
+# ⚠️ PacketStreamService [DEPRECATED]
 
 <p>
-A Luau network service for Roblox that centralizes packet delivery through rate-limited, batched, binary-encoded transmission with encryption, delta streaming, persistent replication via Roblox instance attributes, and a synchronized bidirectional ping protocol for smart packet acknowledgment.
+<strong>This library is deprecated and will no longer be maintained or supported.</strong>
+</p>
+
+<p>
+A Luau network service for Roblox that centralizes packet delivery through rate-limited, batched, binary-encoded transmission with encryption, delta streaming, persistent replication via Roblox instances, and intelligent stream mode switching.
 </p>
 
 </div>
 
 ---
 
+# ⚠️ Deprecation Notice
+
+**PacketStreamService is no longer maintained or supported by the author.** This code is provided as-is for historical and reference purposes only. No updates, bug fixes, or assistance will be provided.
+
+If you are currently using this library, please consider:
+- Forking the repository to maintain your own version
+- Migrating to alternative networking solutions
+- Reviewing the code thoroughly before continued use
+
+---
+
 # Overview
 
-PacketStreamService operates as both a global singleton and a factory. The singleton manages a shared global stream. The factory produces independent `PacketStreamer` instances, each with their own remotes, encryption keys, queues, and configuration.
+PacketStreamService operates as both a global singleton and a factory. The singleton manages a shared global stream. The factory produces independent `PacketStreamer` instances, each with their own remotes, queues, and configuration.
 
 | Layer | Description |
 |---|---|
@@ -27,17 +42,17 @@ PacketStreamService operates as both a global singleton and a factory. The singl
 
 # How It Works
 
-**Dispatch** happens on `RunService.Heartbeat` at every `StreamInterval` milliseconds, subject to a token-bucket `RateLimit`. All outbound entries across all topics accumulate in a queue and flush as a single binary buffer per player per tick.
+**Dispatch** happens on `RunService.Heartbeat` at every `StreamInterval` milliseconds, subject to a token-bucket `RateLimit`. All outbound entries across all topics accumulate in a queue and flush together.
 
-**Encoding** uses a typed binary buffer: booleans cost 1 byte, integers up to 32-bit cost 5 bytes, doubles cost 9 bytes, strings carry a 4-byte length prefix, and tables encode recursively. Topic names are reduced to a 1-byte registry ID.
+**Encoding** uses a typed binary buffer: booleans cost 1 byte, integers up to 32-bit cost 5 bytes, doubles cost 9 bytes, strings carry a 4-byte length prefix, and tables encode recursively. Topic labels themselves are not encoded.
 
-**Encryption** applies to all instancing-mode transmissions. On player join, the server generates a 16-byte cryptographically random key and delivers it privately via `SendTo`. All subsequent instanced writes use that key with an incrementing nonce to produce a unique keystream per write. Key rotation is batched with a cooldown to avoid thrashing on rapid joins.
+**Encryption** applies to all instancing-mode transmissions. On player join, the server generates a 16-byte cryptographically random key and delivers it privately via `SendTo`. All subsequent instancing packets are encrypted with xorshift128+.
 
-**Persistent state** lives as Roblox `Folder` instances with `Attribute`-backed primitive fields and recursive sub-folders for nested tables. Roblox replicates only changed attributes automatically, providing free delta delivery at the engine level. No remote is involved.
+**Persistent state** lives as Roblox `Folder` instances with `Attribute`-backed primitive fields and recursive sub-folders for nested tables. Roblox replicates only changed attributes automatically at the engine level.
 
-**StreamingPacket** delivers a continuous per-player data stream each `StreamInterval`. In instancing mode, data writes to an attribute on the player's private folder under `St_{name}/{userId}/`. In normal mode, it queues into the player's outbound batch.
+**StreamingPacket** delivers a continuous per-player data stream each `StreamInterval`. In instancing mode, data writes to an attribute on the player's private folder under `St_{name}/{userId}/`.
 
-**PingFlags** pack all boolean flags into a minimal bitfield appended to every unreliable ping. Schema definition is locked once set and cannot be modified at runtime. Changes to flag values fire registered listeners on both sides.
+**PingFlags** pack all boolean flags into a minimal bitfield appended to every unreliable ping. Schema definition is locked once set and cannot be modified at runtime. Changes to flag values fire all registered `OnFlagChange` listeners.
 
 ---
 
@@ -152,7 +167,7 @@ Queues a one-time packet for all players. Dispatched via the normal remote batch
 
 ## `:SetPersistent(topic: string, state: {[string]: any}): ()`
 
-Creates or updates a persistent public data topic. State is synced to a `Folder` in `ReplicatedStorage`. Roblox replicates changed attributes automatically at the engine level. Late-joining players receive the current state without any extra send.
+Creates or updates a persistent public data topic. State is synced to a `Folder` in `ReplicatedStorage`. Roblox replicates changed attributes automatically at the engine level. Late-joining players will receive the most current state.
 
 Nested tables become sub-folders. Flat primitives become Attributes.
 
