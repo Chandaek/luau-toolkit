@@ -1,9 +1,0 @@
-{
-  "name": "SecureStorage",
-  "version": "1.0.0",
-  "description": "memory-optimized storage system.",
-  "entry": "init.luau",
-  "author": "Chandaek",
-  "license": "MIT",
-  "dependencies": {}
-}

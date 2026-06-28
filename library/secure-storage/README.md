@@ -10,6 +10,16 @@ A memory-optimized Luau storage module that uses intelligent data tiering to red
 
 ---
 
+**STATUS:** $\color{LightBlue}\texttt{Stand-By}$
+
+**VERSION:** 1.0.0
+
+This package is implemented but not actively developed. Maintenance only.
+
+See [CHANGELOG.md](CHANGELOG.md) for release history.
+
+---
+
 # Overview
 
 SecureStorage separates data into multiple storage tiers to optimize both performance and memory efficiency.

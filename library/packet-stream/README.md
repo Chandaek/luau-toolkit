@@ -16,12 +16,18 @@ A Luau network service for Roblox that centralizes packet delivery through rate-
 
 # ⚠️ Deprecation Notice
 
-**PacketStreamService is no longer maintained or supported by the author.** This code is provided as-is for historical and reference purposes only. No updates, bug fixes, or assistance will be provided.
+**PacketStreamService is no longer maintained or supported by the author.**
+
+This code is provided as-is for historical and reference purposes only. No updates, bug fixes, or assistance will be provided.
 
 If you are currently using this library, please consider:
 - Forking the repository to maintain your own version
 - Migrating to alternative networking solutions
 - Reviewing the code thoroughly before continued use
+
+**STATUS:** $\color{DarkOrange}\texttt{Deprecated}$
+
+**VERSION:** 1.0.0 (Final Release - No Longer Maintained)
 
 ---
 

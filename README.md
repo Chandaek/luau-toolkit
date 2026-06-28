@@ -48,7 +48,14 @@ Although these modules are tailored toward personal project requirements, the re
 - Reference
 - Forking
 - Modification
-- Integration into other Luau projects
+- Integration into other Luau or Roblox projects
+
+---
+
+# Project Standards
+
+- **[PROTOCOL.md](PROTOCOL.md)** — Repository standards covering naming conventions, code organization, package structure, file layout, module ordering, status lifecycle, and README format.
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** — Contribution workflow including how to submit PRs, report issues, write commit messages, and follow code review guidelines.
 
 ---
 
@@ -57,10 +64,3 @@ Although these modules are tailored toward personal project requirements, the re
 This project is licensed under the **MIT License**.
 
 ---
-
-<div align="center">
-
-Provided to [Chandaek/luau-toolkit](https://github.com/Chandaek/luau-toolkit) by `Chandaek@Home/Unknown v0.0`<br>
-(Content powered by [Google AI](https://gemini.google.com/app))
-
-</div>
