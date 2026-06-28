@@ -14,9 +14,10 @@ Use it to keep a consistent overview of STATUS, goals, notes, and next actions f
 - NOTES:
   - Each library should have a TODO.md file
   - Tracks progress for each library in this repo
-  - Use this file when updating or reviewing package STATUS
+  - Use this file when updating or reviewing library package STATUS
 - NEXT:
-  - Discontinue the usage of package metadata
+  - Work on In-Progress STATUS library
+  - Initialize and Implement Not-Started STATUS libraries
 
 ---
 
