@@ -66,7 +66,7 @@ end
 function EventEmitter:Once(EventFunction: (...any) -> ()): (EventConnection)
 	local Connection
 	Connection = self.Connect(self, function(...)
-		Connection:Disconnect()
+		Connection.Disconnect(Connection)
 		EventFunction(...)
 	end)
 	return Connection

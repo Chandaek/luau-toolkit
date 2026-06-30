@@ -203,7 +203,7 @@ he package `README.md`.
 - No trailing whitespace.
 - Use concise, descriptive identifiers with no abbreviations; avoid single-letter names unless in tight scopes.
 - Comments: prefer short top-level comments describing module purpose and any non-obvious behaviors.
-zz
+
 ---
 
 # Code Standards
