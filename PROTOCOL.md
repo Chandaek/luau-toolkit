@@ -197,7 +197,7 @@ he package `README.md`.
 
 ---
 
-# Style 
+# Style
 - Indentation: tab size 4.
 - Line endings: LF.
 - No trailing whitespace.
@@ -231,6 +231,20 @@ Variables and functions within a module are organized by **group**, then alphabe
 
 Require must use string require in place of instance with exception of certain case (recursive requiring).
 
+### Internal Method Usage
+
+Utilization of an internal method such private method must be via colon indexing of the object.
+
+```lua
+function Module:_resolve()
+  -- ...
+end
+
+function Module:Handle()
+  self._resolve(self)
+end
+```
+
 ### Special Section
 
 *.luau File must have the section --- Main --- as the last section.
@@ -244,7 +258,9 @@ Require must use string require in place of instance with exception of certain c
 
 ### Example
 
-```luau
+```lua
+--- Variable ---
+
 -- Constants
 local DEFAULT_TIMEOUT = 5000
 local DEFAULT_RETRIES = 3
@@ -252,6 +268,18 @@ local DEFAULT_RETRIES = 3
 -- State variables
 local _activeConnections = {}
 local _internalConfig = {}
+
+--- Main ---
+
+-- Action methods (private)
+function Module._handleError()
+  -- ...
+end
+
+-- Information methods (private)
+function Module._queryConnectionState()
+  -- ...
+end
 
 -- Action methods (public)
 function Module:Connect()
@@ -262,22 +290,12 @@ function Module:Disconnect()
   -- ...
 end
 
--- Action methods (private)
-function Module._handleError()
-  -- ...
-end
-
 -- Information methods (public)
 function Module:GetStatus()
   -- ...
 end
 
 function Module:IsConnected()
-  -- ...
-end
-
--- Information methods (private)
-function Module._queryConnectionState()
   -- ...
 end
 
@@ -567,7 +585,7 @@ Document constraints or edge cases:
 # Communication
 
 - Report breaking changes in the package `README.md` and bump major version accordingly.
-- For `Deprecated` packages, add migration notes and a planned removal timeline.
+- For `Deprecated` packages, add migration notes with optional planned removal timeline.
 
 ---
 

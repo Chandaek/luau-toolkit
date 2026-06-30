@@ -1,9 +1,24 @@
-export type EventConnection = typeof({
-	Connected = true,
-	Disconnect = function(self) end,
-})
+--- Module ---
+
+--- Variable ---
 
 local FreeRunnerThread: thread? = nil
+
+--- Type ---
+
+export type EventConnection = {
+	Connected: boolean,
+	Disconnect: (self: EventConnection) -> (),
+}
+
+export type EventEmitter = {
+	Connect: (self: EventEmitter, EventFunction: (...any) -> ()) -> (EventConnection),
+	Fire: (self: EventEmitter, ...any) -> (),
+	Once: (self: EventEmitter, EventFunction: (...any) -> ()) -> (EventConnection),
+	Wait: (self: EventEmitter) -> (...any),
+}
+
+--- Main ---
 
 local function AcquireRunnerThreadAndCallEventHandler(EventFunction: (...any) -> (), ...: any): ()
 	local AcquiredRunnerThread = FreeRunnerThread
@@ -12,7 +27,8 @@ local function AcquireRunnerThreadAndCallEventHandler(EventFunction: (...any) ->
 	FreeRunnerThread = AcquiredRunnerThread
 end
 
-local function RunEventHandlerInFreeThread()
+local function RunEventHandlerInFreeThread(...: any): ()
+	AcquireRunnerThreadAndCallEventHandler(...)
 	while true do
 		AcquireRunnerThreadAndCallEventHandler(coroutine.yield())
 	end
@@ -20,44 +36,46 @@ end
 
 local EventEmitter = {}
 
-function EventEmitter:Connect(EventName: string, EventFunction: (...any) -> ()): (EventConnection)
-	if type(EventName) ~= "string" then
-		error("EventName must be a string", 2)
-	end
-	local Designators = self[1]
-	Designators[EventName] = Designators[EventName] or {}
-	
-	local DesignatorList = Designators[EventName]
+function EventEmitter:Connect(EventFunction: (...any) -> ()): (EventConnection)
+	local ConnectionList = self._connections
+	local Index = #ConnectionList + 1
+
 	local Connection = {
 		Connected = true,
 		Disconnect = function(self)
 			if not self.Connected then return end
 			self.Connected = false
-			local Index = table.find(DesignatorList, self)
-			if Index then
-				table.remove(DesignatorList, Index)
+
+			local LastIndex = #ConnectionList
+			local SelfIndex = self._index
+			if SelfIndex ~= LastIndex then
+				local LastConnection = ConnectionList[LastIndex]
+				ConnectionList[SelfIndex] = LastConnection
+				LastConnection._index = SelfIndex
 			end
+			ConnectionList[LastIndex] = nil
 		end,
-		[1] = EventFunction,
+		_callback = EventFunction,
+		_index = Index,
 	}
-	
-	table.insert(DesignatorList, Connection)
+
+	ConnectionList[Index] = Connection
 	return Connection
 end
 
-function EventEmitter:Once(EventName: string, EventFunction: (...any) -> ()): (EventConnection)
+function EventEmitter:Once(EventFunction: (...any) -> ()): (EventConnection)
 	local Connection
-	Connection = self.Connect(self, EventName, function(...)
+	Connection = self.Connect(self, function(...)
 		Connection:Disconnect()
 		EventFunction(...)
 	end)
 	return Connection
 end
 
-function EventEmitter:Wait(EventName: string): (...any)
+function EventEmitter:Wait(): (...any)
 	local Arguments
 	local CurrentThread = coroutine.running()
-	local Connection = self:Once(EventName, function(...)
+	local Connection = self.Once(self, function(...)
 		Arguments = table.pack(...)
 		task.spawn(CurrentThread)
 	end)
@@ -67,37 +85,27 @@ function EventEmitter:Wait(EventName: string): (...any)
 	return table.unpack(Arguments)
 end
 
-function EventEmitter:Fire(EventName: string, ...: any): ()
-	local DesignatorList = self[1][EventName]
-	if not DesignatorList then return end
-	
-	for _, Connection in ipairs(DesignatorList) do
-		if Connection.Connected then
-			if not FreeRunnerThread then
-				FreeRunnerThread = coroutine.create(RunEventHandlerInFreeThread)
-				coroutine.resume(FreeRunnerThread :: any)
-			end
-			task.spawn(FreeRunnerThread :: any, Connection[1], ...)
+function EventEmitter:Fire(...: any): ()
+	local ConnectionList = self._connections
+
+	for Index = 1, #ConnectionList do
+		local Connection = ConnectionList[Index]
+		if not FreeRunnerThread then
+			FreeRunnerThread = coroutine.create(RunEventHandlerInFreeThread)
 		end
+		task.spawn(FreeRunnerThread :: thread, Connection._callback, ...)
 	end
 end
-
-export type EventEmitter = {
-	Connect: (self: EventEmitter, EventName: string, EventFunction: (...any) -> ()) -> (EventConnection),
-	Once: (self: EventEmitter, EventName: string, EventFunction: (...any) -> ()) -> (EventConnection),
-	Wait: (self: EventEmitter, EventName: string) -> (...any),
-	Fire: (self: EventEmitter, EventName: string, ...any) -> (),
-	Destroy: (self: EventEmitter) -> (),
-}
 
 local EventEmitterImpl = {}
 EventEmitterImpl.__index = EventEmitter
 
 function EventEmitterImpl.new(): (EventEmitter)
-	local Event = setmetatable({ {} }, EventEmitterImpl)
-	return Event
+	local self = setmetatable({}, EventEmitterImpl)
+	self._connections = {}
+	return self
 end
 
 return EventEmitterImpl :: {
-	new: () -> EventEmitter,
+	new: () -> (EventEmitter)
 }
