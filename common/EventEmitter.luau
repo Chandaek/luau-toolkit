@@ -1,5 +1,3 @@
---- Module ---
-
 --- Variable ---
 
 local FreeRunnerThread: thread? = nil
