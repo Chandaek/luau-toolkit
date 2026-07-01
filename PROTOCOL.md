@@ -206,6 +206,56 @@ he package `README.md`.
 
 ---
 
+# Allowed Sections
+
+The only section comments permitted in Luau source files are:
+
+- `--- Service ---`
+- `--- Reference ---`
+- `--- Module ---`
+- `--- Type ---`
+- `--- Variable ---`
+- `--- Main ---`
+
+When multiple section comments are used, they must appear in this order from top to bottom:
+
+1. `--- Service ---`
+2. `--- Reference ---`
+3. `--- Module ---`
+4. `--- Type ---`
+5. `--- Variable ---`
+6. `--- Main ---`
+
+A section comment must only be included if the corresponding content exists in the file. Sections that are not used should be omitted entirely and must not be added as placeholders.
+
+Each section comment must be followed by a single blank line before the first line of code or content belonging to that section. This creates a clear visual separation between the section header and the code beneath it.
+
+`--- Main ---` is reserved for the primary entry point or execution logic and should appear last when present.
+
+Example:
+
+```lua
+--- Module ---
+
+local Resolver = require(...)
+
+--- Type ---
+
+export type Resolver = Resolver.Resolver
+
+--- Variable ---
+
+local GlobalResolver = Resolver.new()
+
+--- Main ---
+
+local Module = {}
+
+-- ... content here ...
+
+return Module
+```
+
 # Code Standards
 
 ## Naming
@@ -257,6 +307,8 @@ end
 - Private functions follow the same pattern and are placed before or alongside their public equivalents.
 
 ### Example
+
+Section comment within the example are for information and is to be not use in actual code.
 
 ```lua
 --- Variable ---
