@@ -1,7 +1,7 @@
 export type ResolverConfig = {}
 
 export type Resolver = {
-	Memoize: <Identity, Target>(self: Resolver, Identifier: Identity, Action: () -> (Target)) -> (Target),
+	Memoize: <Identity, Target>(self: Resolver, Identifier: Identity, Action: () -> (Target), ...any) -> (Target),
 	Check: <Identity>(self: Resolver, Identifier: Identity) -> (boolean),
 }
 
@@ -11,13 +11,13 @@ function Resolver:Insert<Identity, DataValue>(Identifier: Identity, Data: DataVa
 	self._normalCache[Identifier] = Data
 end
 
-function Resolver:Memoize<Identity, Target>(Identifier: Identity, Action: () -> (Target)): (Target)
+function Resolver:Memoize<Identity, Target>(Identifier: Identity, Action: () -> (Target), ...: any): (Target)
 	local Existing = self._normalCache[Identifier]
 	if Existing then
 		return Existing
 	end
 
-	local Success, Result = xpcall(Action, debug.traceback)
+	local Success, Result = xpcall(Action, debug.traceback, ...)
 	if not Success then
 		error(Result, 0)
 	end

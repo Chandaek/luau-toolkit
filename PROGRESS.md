@@ -28,8 +28,11 @@ Use it to keep a consistent overview of STATUS, goals, notes, and next actions f
 - FOCUS: Fabric package implementation and integration
 - NOTES:
   - Thread Identification System and Manipulation
+  - ThreadMaster lifecycle work is underway
   - All required directories and files created
 - NEXT:
+  - Add an environment variable for each ThreadMaster
+  - Handle garbage collection for the ThreadMaster resolver
   - Complete init.luau implementation
   - Implement source modules
   - Add API documentation to README.md
