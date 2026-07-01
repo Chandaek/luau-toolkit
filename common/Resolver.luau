@@ -39,7 +39,7 @@ end
 local ResolverImpl = {}
 ResolverImpl.__index = Resolver
 
-function ResolverImpl.new(Config: ResolverConfig): (Resolver)
+function ResolverImpl.new(): (Resolver)
 	local self = setmetatable({}, ResolverImpl)
 	self._normalCache = {}
 
@@ -47,5 +47,5 @@ function ResolverImpl.new(Config: ResolverConfig): (Resolver)
 end
 
 return ResolverImpl :: {
-	new: (Config: ResolverConfig) -> (Resolver),
+	new: () -> (Resolver),
 }
