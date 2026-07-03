@@ -4,7 +4,7 @@ local Resolver = require("@game/ReplicatedStorage/Common/Resolver" :: any)
 
 --- Type ---
 
-export type DeterminableChoice = "Identifier" | "Thread" | "Master"
+export type DeterminableChoice = "Identifier" | "IsThread" | "Master"
 export type ScopeDataVisibility = "Global" | "Private" | "Public"
 
 export type ThreadConfiguration = {
@@ -21,7 +21,7 @@ export type ThreadMaster = {
 }
 
 export type Fabric = {
-	Bind: (self: Fabric, Identifier: string, ThreadConfig: ThreadConfiguration) -> (ThreadMaster),
+	Bind: (self: Fabric, Identifier: string?, ThreadConfig: ThreadConfiguration) -> (ThreadMaster),
 	Determine: (self: Fabric, GetChoice: DeterminableChoice, Thread: thread?) -> ((string | boolean | ThreadMaster)?),
 	GetPublicScope: (self: Fabric, Master: ThreadMaster, Key: string) -> (any),
 	GetGScopeValue: (self: Fabric, Key: string) -> (any),

@@ -12,7 +12,7 @@ A thread orchestration library for Luau that provides reusable `ThreadMaster` in
 
 **STATUS:** $\color{LightGreen}\texttt{Active}$
 
-**VERSION:** 1.0.0 candidate
+**VERSION:** 1.0.1
 
 This package is stable, maintained, and recommended for use.
 

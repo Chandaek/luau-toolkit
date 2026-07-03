@@ -45,13 +45,13 @@ local function AllocateRunnerThreadSequence(): (thread)
 	return FreeRunnerThread :: thread
 end
 
-function FabricImpl:Bind(Identifier: string, ThreadConfig: ThreadConfiguration): (ThreadMaster)
+function FabricImpl:Bind(Identifier: string?, ThreadConfig: ThreadConfiguration): (ThreadMaster)
 	FabricUniqueMasterNumericAmount += 1
-	Identifier = Identifier or `Fabric_Default_{FabricUniqueMasterNumericAmount}`
+	local TypedIdentifier = typeof(Identifier) == "string" and Identifier or `Fabric_Default_{FabricUniqueMasterNumericAmount}`
 
 	local FreeRunnerThread: thread?
 	local ResolvedThreadConfig = {
-		Name = ThreadConfig.Name or Identifier
+		Name = ThreadConfig.Name or TypedIdentifier
 	}
 
 	local CurrentMaster
@@ -67,9 +67,9 @@ function FabricImpl:Bind(Identifier: string, ThreadConfig: ThreadConfiguration):
 	end
 
 	if FreeRunnerThread then
-		FabricIdentifierRegisters[FreeRunnerThread] = Identifier
+		FabricIdentifierRegisters[FreeRunnerThread] = TypedIdentifier
 	end
-	FabricMasterRegisters[Identifier] = CurrentMaster
+	FabricMasterRegisters[TypedIdentifier] = CurrentMaster
 	return CurrentMaster
 end
 
@@ -77,7 +77,7 @@ function FabricImpl:Determine(GetChoice: DeterminableChoice, Thread: thread?): (
 	local CurrentThread = Thread or coroutine.running()
 	local Identifier = FabricIdentifierRegisters[CurrentThread]
 	local ExistingData = GetChoice == "Identifier" and Identifier
-		or GetChoice == "Thread" and Identifier ~= nil
+		or GetChoice == "IsThread" and Identifier ~= nil
 		or GetChoice == "Master" and FabricMasterRegisters[Identifier]
 		or nil
 

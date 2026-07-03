@@ -15,14 +15,14 @@ local ThreadMaster = {}
 
 function ThreadMaster:Run(ProcessName: string?, Action: (Master: ThreadMaster, ...any) -> (...any), ...: any): (...any)
 	assert(typeof(Action) == "function", "Action must be a function")
-	assert(self._freeRunnerThread and coroutine.status(self._freeRunnerThread) ~= "dead", "Runner thread is not available")
+	assert(self._freeRunnerThread and coroutine.status(self._freeRunnerThread) ~= "dead", `{self.Name}: Runner thread is not available`)
 
 	local Name = self.Name or "ThreadMaster"
 	ProcessName = ProcessName and tostring(ProcessName) or "unnamed"
 
 	local PackedTuple: { any }?
 	local Success, Error = coroutine.resume(self._freeRunnerThread, function(...: any)
-		PackedTuple = self._resolver:Resolve(`{Name}({ProcessName})`, function(...: any)
+		PackedTuple = self._resolver:Resolve(`{Name}({ProcessName}):`, function(...: any)
 			return table.pack(Action(self, ...))
 		end, true, ...)
 	end, ...)
@@ -39,7 +39,11 @@ function ThreadMaster:Run(ProcessName: string?, Action: (Master: ThreadMaster, .
 end
 
 function ThreadMaster:GetScopeValue(Key: string): (...any)
-	local Value = self._scopeDataRegister[Key]
+	if not self._fabric then
+		error(`{self.Name}: attempt to get from destroyed ThreadMaster.`, 0)
+		return
+	end
+	local Value = self._privateScopeDataRegister[Key]
 	if Value ~= nil then
 		return Value
 	end
@@ -49,6 +53,10 @@ end
 
 function ThreadMaster:SetScopeValue<ValueType>(Key: string, Value: ValueType, Visibility: ScopeDataVisibility): ()
 	if Visibility == "Global" then
+		if not self._fabric then
+			error(`{self.Name}: attempt to set to destroyed ThreadMaster.`, 0)
+			return
+		end
 		self._fabric:SetGScopeValue(Key, Value)
 	elseif Visibility == "Private" then
 		self._privateScopeDataRegister[Key] = Value
@@ -60,6 +68,10 @@ function ThreadMaster:SetScopeValue<ValueType>(Key: string, Value: ValueType, Vi
 end
 
 function ThreadMaster:Destroy(): ()
+	if not self._fabric then
+		error(`{self.Name}: attempt to destroy an already destroyed ThreadMaster.`, 0)
+		return
+	end
 	self._fabric:Recycle(self)
 end
 
