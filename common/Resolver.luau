@@ -1,7 +1,7 @@
 export type ResolverConfig = {}
 
 export type Resolver = {
-	Memoize: <Identity, Target>(self: Resolver, Identifier: Identity, Action: () -> (Target), ...any) -> (Target),
+	Resolve: <Identity, Target>(self: Resolver, Identifier: Identity, Action: () -> (Target), ...any) -> (Target),
 	Check: <Identity>(self: Resolver, Identifier: Identity) -> (boolean),
 }
 
@@ -11,9 +11,11 @@ function Resolver:Insert<Identity, DataValue>(Identifier: Identity, Data: DataVa
 	self._normalCache[Identifier] = Data
 end
 
-function Resolver:Memoize<Identity, Target>(Identifier: Identity, Action: () -> (Target), ...: any): (Target)
+function Resolver:Resolve<Identity, Target>(Identifier: Identity, Action: () -> (Target), Memoize: boolean?, ...: any): (Target)
+	Memoize = Memoize or true
+
 	local Existing = self._normalCache[Identifier]
-	if Existing then
+	if Memoize and Existing then
 		return Existing
 	end
 
@@ -22,7 +24,9 @@ function Resolver:Memoize<Identity, Target>(Identifier: Identity, Action: () -> 
 		error(Result, 0)
 	end
 
-	self._normalCache[Identifier] = Result
+	if Memoize then
+		self._normalCache[Identifier] = Result
+	end
 	return Result
 end
 
@@ -34,6 +38,10 @@ end
 
 function Resolver:Check<Identity>(Identifier: Identity): (boolean)
 	return self._normalCache[Identifier] ~= nil
+end
+
+function Resolver:Clear(): ()
+	table.clear(self._normalCache)
 end
 
 local ResolverImpl = {}
