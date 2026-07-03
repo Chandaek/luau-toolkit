@@ -17,6 +17,7 @@ export type ThreadMaster = {
 	Run: (self: ThreadMaster, ProcessName: string?, Action: (...any) -> (...any), ...any) -> (...any),
 	GetScopeValue: (self: ThreadMaster, Key: string) -> (...any),
 	SetScopeValue: (self: ThreadMaster, Key: string, Value: any, Visibility: ScopeDataVisibility) -> (),
+	RemoveScopeValue: (self: ThreadMaster, Key: string, Visibility: ScopeDataVisibility) -> (),
 	Destroy: (self: ThreadMaster) -> (),
 }
 
@@ -26,6 +27,7 @@ export type Fabric = {
 	GetPublicScope: (self: Fabric, Master: ThreadMaster, Key: string) -> (any),
 	GetGScopeValue: (self: Fabric, Key: string) -> (any),
 	SetGScopeValue: <ValueType>(self: Fabric, Key: string, Value: ValueType) -> (),
+	RemoveGScopeValue: (self: Fabric, Key: string) -> (),
 	Recycle: (self: Fabric, Master: ThreadMaster) -> ()
 }
 

@@ -84,6 +84,22 @@ function ThreadMaster:SetScopeValue<ValueType>(Key: string, Value: ValueType, Vi
 	end
 end
 
+function ThreadMaster:RemoveScopeValue(Key: string, Visibility: ScopeDataVisibility): ()
+	if self._fabric == nil then
+		error(`{self.Name}: Attempt to remove from destroyed ThreadMaster.`, 0)
+	end
+
+	if Visibility == "Global" then
+		self._fabric:RemoveGScopeValue(Key)
+	elseif Visibility == "Private" then
+		self._privateScopeDataRegister[Key] = nil
+		self._privateScopeDataRegister["All"][Key] = nil
+	else
+		self._publicScopeDataRegister[Key] = nil
+		self._publicScopeDataRegister["All"][Key] = nil
+	end
+end
+
 function ThreadMaster:Destroy(): ()
 	if self._fabric == nil then
 		error(`{self.Name}: Attempt to destroy an already destroyed ThreadMaster.`, 0)

@@ -12,7 +12,7 @@ A thread orchestration library for Luau that provides reusable `ThreadMaster` in
 
 **STATUS:** $\color{LightGreen}\texttt{Active}$
 
-**VERSION:** 1.0.1
+**VERSION:** 1.1.0
 
 This package is stable, maintained, and recommended for use.
 
@@ -93,6 +93,13 @@ Sets a Fabric-level global scope value.
 
 ---
 
+## `:RemoveGScopeValue(Key)`
+
+Removes the value associated with `Key` from the Fabric-level global scope.
+If the key does not exist, the operation is a no-op.
+
+---
+
 # ThreadMaster API
 
 A `ThreadMaster` is created by `Fabric:Bind(...)`.
@@ -127,6 +134,21 @@ Stores a value with the requested visibility.
 | `Global` | Sets a global Fabric scope value. |
 | `Private` | Sets a private value for this master only. |
 | otherwise | Sets a public value for this master. |
+
+---
+
+## `:RemoveScopeValue(Key, Visibility)`
+
+Removes the value associated with `Key` from the requested scope.
+If `Visibility` is `Global`, the value is removed from Fabric global scope.
+If `Visibility` is `Private`, the value is removed from this master's private scope.
+If `Visibility` is omitted or any other value, the value is removed from this master's public scope.
+
+| Visibility | Behavior |
+|---|---|
+| `Global` | Removes from Fabric global scope. |
+| `Private` | Removes from this master's private scope. |
+| otherwise | Removes from this master's public scope. |
 
 ---
 

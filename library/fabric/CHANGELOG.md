@@ -7,9 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.1] - 2026-07-03
+## [1.1.0] - 2026-07-03
 
 **STATUS:** $\color{LightGreen}\texttt{Active}$
+
+### Added
+
+- Added `ThreadMaster:RemoveScopeValue` support for removing scope values by key.
+- Added `Fabric:RemoveGScopeValue` support ofr removing global scope values by key.
+
+---
+
+## [1.0.2] - 2026-07-03
+
+### Fixed
+
+- Logged `v1.0.2` fix for `ThreadMaster` guard clause updates and changelog entry completion.
+
+---
+
+## [1.0.1] - 2026-07-03
 
 ### Fixed
 

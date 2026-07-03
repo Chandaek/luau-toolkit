@@ -101,6 +101,11 @@ function FabricImpl:SetGScopeValue<ValueType>(Key: string, Value: ValueType): ()
 	FabricGScopeDataRegister[Key] = Value
 end
 
+function FabricImpl:RemoveGScopeValue(Key: string): ()
+	FabricGScopeDataRegister["All"][Key] = nil
+	FabricGScopeDataRegister[Key] = nil
+end
+
 function FabricImpl:Recycle(Master: ThreadMaster): ()
 	local TypedMaster: PrivateThreadMaster = Master :: PrivateThreadMaster
 
