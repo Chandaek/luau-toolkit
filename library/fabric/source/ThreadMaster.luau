@@ -13,9 +13,10 @@ export type ThreadMaster = SharedFabric.ThreadMaster
 
 local ThreadMaster = {}
 
-function ThreadMaster:Run(ProcessName: string?, Action: (Master: ThreadMaster, ...any) -> (...any), ...: any): (...any)
-	assert(typeof(Action) == "function", "Action must be a function")
-	assert(self._freeRunnerThread and coroutine.status(self._freeRunnerThread) ~= "dead", `{self.Name}: Runner thread is not available`)
+function ThreadMaster:_Run(ProcessName: string?, Action: (Master: ThreadMaster, ...any) -> (...any), ...: any): (...any)
+	if self._fabric == nil then
+		error(`{self.Name}: Attempt to run task for destroyed ThreadMaster.`, 0)
+	end
 
 	local Name = self.Name or "ThreadMaster"
 	ProcessName = ProcessName and tostring(ProcessName) or "unnamed"
@@ -38,12 +39,28 @@ function ThreadMaster:Run(ProcessName: string?, Action: (Master: ThreadMaster, .
 	return nil
 end
 
-function ThreadMaster:GetScopeValue(Key: string): (...any)
-	if not self._fabric then
-		error(`{self.Name}: attempt to get from destroyed ThreadMaster.`, 0)
-		return
+function ThreadMaster:Run(ProcessName: string?, Action: (Master: ThreadMaster, ...any) -> (...any), ...: any): (...any)
+	if self._fabric == nil then
+		error(`{self.Name}: Attempt to run task for destroyed ThreadMaster.`, 0)
 	end
-	local Value = self._privateScopeDataRegister[Key]
+
+	if typeof(Action) ~= "function" then
+		error("Action must be a function", 0)
+	end
+
+	if not self._freeRunnerThread or coroutine.status(self._freeRunnerThread) == "dead" then
+		error(`{self.Name}: Runner thread is not available`, 0)
+	end
+
+	return self:_Run(ProcessName, Action, ...)
+end
+
+function ThreadMaster:GetScopeValue(Key: string): (...any)
+	if self._fabric == nil then
+		error(`{self.Name}: Attempt to get from destroyed ThreadMaster.`, 0)
+	end
+
+	local Value = self._privateScopeDataRegister[Key] or self._publicScopeDataRegister[Key]
 	if Value ~= nil then
 		return Value
 	end
@@ -52,11 +69,11 @@ function ThreadMaster:GetScopeValue(Key: string): (...any)
 end
 
 function ThreadMaster:SetScopeValue<ValueType>(Key: string, Value: ValueType, Visibility: ScopeDataVisibility): ()
+	if self._fabric == nil then
+		error(`{self.Name}: Attempt to set to destroyed ThreadMaster.`, 0)
+	end
+
 	if Visibility == "Global" then
-		if not self._fabric then
-			error(`{self.Name}: attempt to set to destroyed ThreadMaster.`, 0)
-			return
-		end
 		self._fabric:SetGScopeValue(Key, Value)
 	elseif Visibility == "Private" then
 		self._privateScopeDataRegister[Key] = Value
@@ -68,10 +85,10 @@ function ThreadMaster:SetScopeValue<ValueType>(Key: string, Value: ValueType, Vi
 end
 
 function ThreadMaster:Destroy(): ()
-	if not self._fabric then
-		error(`{self.Name}: attempt to destroy an already destroyed ThreadMaster.`, 0)
-		return
+	if self._fabric == nil then
+		error(`{self.Name}: Attempt to destroy an already destroyed ThreadMaster.`, 0)
 	end
+
 	self._fabric:Recycle(self)
 end
 

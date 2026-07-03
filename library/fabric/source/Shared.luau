@@ -34,7 +34,9 @@ export type PrivateThreadMaster = ThreadMaster & {
 	_freeRunnerThread: thread,
 	_resolver: { [any]: any },
 	_privateScopeDataRegister: { [string]: any },
-	_publicScopeDataRegister: { [string]: any }
+	_publicScopeDataRegister: { [string]: any },
+
+	_Run: (self: PrivateThreadMaster, ProcessName: string?, Action: (...any) -> (...any), ...any) -> (...any)
 }
 
 --- Main ---

@@ -171,7 +171,7 @@ However currently there has been no test done yet.
 
 # Dependencies
 
-- `Common/Resolver`
+- `common/Resolver`
 
 ---
 

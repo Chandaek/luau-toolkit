@@ -17,8 +17,8 @@ export type PrivateThreadMaster = FabricShared.PrivateThreadMaster
 
 local FabricGScopeDataRegister: { All: { [string]: any }, [string]: any } = { ["All"] = {} }
 local FabricIdentifierRegisters: { [thread]: string } = {}
-local FabricRecycledMaster: { [number]: ThreadMaster } = {}
 local FabricMasterRegisters: { [string]: ThreadMaster } = {}
+local FabricRecycledMaster: { [number]: ThreadMaster } = {}
 
 local FabricUniqueMasterNumericAmount = 0
 
@@ -56,9 +56,13 @@ function FabricImpl:Bind(Identifier: string?, ThreadConfig: ThreadConfiguration)
 
 	local CurrentMaster
 	if #FabricRecycledMaster > 0 then
-		local RecycledMaster = table.remove(FabricRecycledMaster) :: FabricShared.PrivateThreadMaster
+		local RecycledMaster = table.remove(FabricRecycledMaster) :: PrivateThreadMaster
 		CurrentMaster = FabricShared.SetConfigurationToMaster(RecycledMaster, ResolvedThreadConfig)
 		CurrentMaster._fabric = self
+
+		if coroutine.status(CurrentMaster._freeRunnerThread) == "dead" then
+			CurrentMaster._freeRunnerThread = AllocateRunnerThreadSequence()
+		end
 		FreeRunnerThread = CurrentMaster._freeRunnerThread
 	else
 		FreeRunnerThread = AllocateRunnerThreadSequence()
