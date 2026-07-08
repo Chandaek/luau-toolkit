@@ -2,7 +2,7 @@
 
 export type Console = {
 	Assert: (self: Console, Condition: boolean, ...any) -> (),
-	SetServiceName: (self: Console, Name: string?) -> (),
+	SetProcessName: (self: Console, Name: string?) -> (),
 
 	CreateContext: (self: Console, Name: string, Context: {[string]: any}) -> (),
 	WithContext: (self: Console, Name: string?) -> (),
@@ -18,7 +18,7 @@ export type Console = {
 --- Variable ---
 
 local DEFAULT_MAXIMUM_DUMP_DEPTH = 2
-local DEFAULT_SERVICE_NAME = "UnnamedProcess"
+local DEFAULT_PROCESS_NAME = "UnnamedProcess"
 local DEFAULT_STACK_LEVEL = 1
 
 --- Main ---
@@ -71,8 +71,8 @@ local function joinArgs(...: any): (string)
 	return table.concat(Parts, " ")
 end
 
-local function prefix(ServiceName: string, Kind: string): (string)
-	return `({ServiceName}:{Kind}): `
+local function prefix(ProcessName: string, Kind: string): (string)
+	return `({ProcessName}:{Kind}): `
 end
 
 local Console = {}
@@ -97,14 +97,19 @@ function Console:Assert(Condition: boolean, ...: any): ()
 	self.Error(self, "Assertion failed: " .. Message, DEFAULT_STACK_LEVEL + 1)
 end
 
+function Console:SetProcessName(Name: string?): ()
+	self._processName = Name or self._processName
+end
+
 function Console:CreateContext(Name: string, Context: {[string]: any}): ()
 	self._contexts[Name] = Context
 end
 
-function Console:Dump(Value: any, Label: string?, MaximumDepth: number?): ()
-	local LabelPrefix = Label and (self._ResolveMessage(self, tostring(Label)) .. ": ") or ""
-	local Dumped = dumpTable(Value, MaximumDepth or DEFAULT_MAXIMUM_DUMP_DEPTH)
-	print(prefix(self._serviceName, "DUMP") .. LabelPrefix .. Dumped)
+function Console:WithContext(Name: string?): ()
+	if not self._activeContext[Name] then
+		error(`Context "{Name}" does not exist`, 0)
+	end
+	self._activeContext = Name
 end
 
 function Console:Error(Message: any, StackLevel: number?): ()
@@ -113,15 +118,21 @@ function Console:Error(Message: any, StackLevel: number?): ()
 	local Source, Line = getCallerInfo(Level + 1)
 	local Location = if Source then `{Source}:{Line}` else "unknown"
 	local Trace = getTrace(Level + 1)
-	error(`{prefix(self._serviceName, "ERROR")}{FormattedMessage} [{Location}]\n{Trace}`, 0)
+	error(`{prefix(self._processName, "ERROR")}{FormattedMessage} [{Location}]\n{Trace}`, 0)
 end
 
 function Console:Print(...: any): ()
-	print(prefix(self._serviceName, "INFO") .. self._ResolveMessage(self, joinArgs(...)))
+	print(prefix(self._processName, "INFO") .. self._ResolveMessage(self, joinArgs(...)))
 end
 
-function Console:SetServiceName(Name: string?): ()
-	self._serviceName = Name or self._serviceName
+function Console:Warn(...: any): ()
+	warn(prefix(self._processName, "WARN") .. self._ResolveMessage(self, joinArgs(...)))
+end
+
+function Console:Dump(Value: any, Label: string?, MaximumDepth: number?): ()
+	local LabelPrefix = Label and (self._ResolveMessage(self, tostring(Label)) .. ": ") or ""
+	local Dumped = dumpTable(Value, MaximumDepth or DEFAULT_MAXIMUM_DUMP_DEPTH)
+	print(prefix(self._processName, "DUMP") .. LabelPrefix .. Dumped)
 end
 
 function Console:Trace(...: any): ()
@@ -129,28 +140,20 @@ function Console:Trace(...: any): ()
 	local Source, Line = getCallerInfo(DEFAULT_STACK_LEVEL + 1)
 	local Location = if Source then `{Source}:{Line}` else "unknown"
 	local Trace = getTrace(DEFAULT_STACK_LEVEL + 1)
-	print(`{prefix(self._serviceName, "TRACE")}{Message} [{Location}]\n{Trace}`)
-end
-
-function Console:Warn(...: any): ()
-	warn(prefix(self._serviceName, "WARN") .. self._ResolveMessage(self, joinArgs(...)))
-end
-
-function Console:WithContext(Name: string?): ()
-	self._activeContext = Name
+	print(`{prefix(self._processName, "TRACE")}{Message} [{Location}]\n{Trace}`)
 end
 
 local ConsoleImpl = {}
 ConsoleImpl.__index = Console
 
-function ConsoleImpl.new(ServiceName: string?): (Console)
+function ConsoleImpl.new(ProcessName: string?): (Console)
 	local self = setmetatable({}, ConsoleImpl)
 	self._activeContext = nil
 	self._contexts = {}
-	self._serviceName = ServiceName or DEFAULT_SERVICE_NAME
+	self._processName = ProcessName or DEFAULT_PROCESS_NAME
 	return self
 end
 
 return ConsoleImpl :: {
-	new: (ServiceName: string?) -> (Console),
+	new: (ProcessName: string?) -> (Console),
 }
