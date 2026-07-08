@@ -1,7 +1,3 @@
---- Variable ---
-
-local FreeRunnerThread: thread? = nil
-
 --- Type ---
 
 export type EventConnection = {
@@ -15,6 +11,10 @@ export type EventEmitter = {
 	Once: (self: EventEmitter, EventFunction: (...any) -> ()) -> (EventConnection),
 	Wait: (self: EventEmitter) -> (...any),
 }
+
+--- Variable ---
+
+local FreeRunnerThread: thread? = nil
 
 --- Main ---
 
