@@ -22,7 +22,7 @@ export type ThreadMaster = {
 }
 
 export type Fabric = {
-	Bind: (self: Fabric, Identifier: string?, ThreadConfig: ThreadConfiguration) -> (ThreadMaster),
+	Bind: (self: Fabric, Identifier: string?, ThreadConfig: ThreadConfiguration?) -> (ThreadMaster),
 	Determine: (self: Fabric, GetChoice: DeterminableChoice, Thread: thread?) -> ((string | boolean | ThreadMaster)?),
 	GetPublicScope: (self: Fabric, Master: ThreadMaster, Key: string) -> (any),
 	GetGScopeValue: (self: Fabric, Key: string) -> (any),

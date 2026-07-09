@@ -45,13 +45,14 @@ local function AllocateRunnerThreadSequence(): (thread)
 	return FreeRunnerThread :: thread
 end
 
-function FabricImpl:Bind(Identifier: string?, ThreadConfig: ThreadConfiguration): (ThreadMaster)
+function FabricImpl:Bind(Identifier: string?, ThreadConfig: ThreadConfiguration?): (ThreadMaster)
 	FabricUniqueMasterNumericAmount += 1
 	local TypedIdentifier = typeof(Identifier) == "string" and Identifier or `Fabric_Default_{FabricUniqueMasterNumericAmount}`
+	local TypedThreadConfig = typeof(ThreadConfig) == "table" and ThreadConfig or {}
 
 	local FreeRunnerThread: thread?
 	local ResolvedThreadConfig = {
-		Name = ThreadConfig.Name or TypedIdentifier
+		Name = TypedThreadConfig.Name or TypedIdentifier
 	}
 
 	local CurrentMaster

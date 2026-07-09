@@ -22,8 +22,8 @@ function ThreadMaster:_Run(ProcessName: string?, Action: (Master: ThreadMaster, 
 	ProcessName = ProcessName and tostring(ProcessName) or "unnamed"
 
 	local PackedTuple: { any }?
-	local Success, Error = coroutine.resume(self._freeRunnerThread, function(...: any)
-		PackedTuple = self._resolver:Resolve(`{Name}({ProcessName}):`, function(...: any)
+	local Success, Error = coroutine.resume(self._freeRunnerThread, function(...: any): ()
+		PackedTuple = self._resolver:Resolve(`{Name}({ProcessName}):`, function(...: any): ({ any })
 			return table.pack(Action(self, ...))
 		end, true, ...)
 	end, ...)

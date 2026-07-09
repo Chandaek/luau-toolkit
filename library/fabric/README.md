@@ -12,7 +12,7 @@ A thread orchestration library for Luau that provides reusable `ThreadMaster` in
 
 **STATUS:** $\color{LightGreen}\texttt{Active}$
 
-**VERSION:** 1.1.0
+**VERSION:** 1.1.1
 
 This package is stable, maintained, and recommended for use.
 
@@ -45,14 +45,14 @@ Fabric is a thread manager with environmental variable for each ThreadMaster.
 
 # API Documentation
 
-## `:Bind(Identifier, ThreadConfig)`
+## `:Bind(Identifier?, ThreadConfig?)`
 
 Creates or reuses a `ThreadMaster` instance for the given identifier.
 
 | Parameter | Type | Description |
 |---|---|---|
 | `Identifier` | `string?` | Optional name for the master. Defaults to `Fabric_Default_<n>`. |
-| `ThreadConfig` | `table` | Configuration object containing `Name`. |
+| `ThreadConfig` | `table?` | Optional configuration object containing `Name`. |
 
 | Returns | Type | Description |
 |---|---|---|
