@@ -14,7 +14,7 @@ export type ThreadConfiguration = {
 export type ThreadMaster = {
 	Name: string,
 
-	Run: (self: ThreadMaster, ProcessName: string?, Action: (...any) -> (...any), ...any) -> (...any),
+	Run: (self: ThreadMaster, ProcessName: string?, Action: (Master: ThreadMaster, ...any) -> (...any), ...any) -> (...any),
 	GetScopeValue: (self: ThreadMaster, Key: string) -> (...any),
 	SetScopeValue: (self: ThreadMaster, Key: string, Value: any, Visibility: ScopeDataVisibility) -> (),
 	RemoveScopeValue: (self: ThreadMaster, Key: string, Visibility: ScopeDataVisibility) -> (),
