@@ -10,6 +10,10 @@ A public collection of reusable Luau modules and utilities used across multiple 
 
 ---
 
+> ⚠️ **ARCHIVED** — This repository is no longer being worked on and is maintained in archive status. No new features or updates will be added.
+
+---
+
 # Overview
 
 `luau-toolkit` is a centralized repository containing reusable modules, utilities, and development helpers designed for Luau-based projects.
